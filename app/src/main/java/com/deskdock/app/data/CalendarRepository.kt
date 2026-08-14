@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import com.deskdock.app.model.CalendarEvent
+import java.util.Calendar
 
 class CalendarRepository(private val context: Context) {
     data class CalendarState(
@@ -19,7 +20,7 @@ class CalendarRepository(private val context: Context) {
             return CalendarState(0, emptyList(), emptyList())
         }
         val names = loadVisibleCalendarNames()
-        return CalendarState(names.size, loadUpcoming(limit), names)
+        return CalendarState(names.size, loadToday(limit), names)
     }
 
     private fun loadVisibleCalendarNames(): List<String> {
@@ -53,11 +54,23 @@ class CalendarRepository(private val context: Context) {
         return names
     }
 
-    private fun loadUpcoming(limit: Int): List<CalendarEvent> {
-        val now = System.currentTimeMillis()
-        val end = now + 7L * 24L * 60L * 60L * 1000L
+    private fun loadToday(limit: Int): List<CalendarEvent> {
+        val start = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val end = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
-            ContentUris.appendId(it, now)
+            ContentUris.appendId(it, start)
             ContentUris.appendId(it, end)
         }.build()
 
