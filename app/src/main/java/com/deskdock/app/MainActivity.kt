@@ -88,7 +88,14 @@ class MainActivity : Activity() {
         locationRepo.getCurrent { c ->
             val lat = c?.latitude ?: -23.5505
             val lon = c?.longitude ?: -46.6333
-            dockView.setLocationLabel(if (c == null) "São Paulo · fallback" else "Local atual")
+            val locationLabel = if (c == null) {
+                "São Paulo · fallback (sem localização recente)"
+            } else if (c.accuracyMeters > 0) {
+                "Local atual · precisão ±${c.accuracyMeters.toInt()} m"
+            } else {
+                "Local atual"
+            }
+            dockView.setLocationLabel(locationLabel)
             weatherRepo.fetch(lat, lon) { result ->
                 dockView.setWeatherLoading(false)
                 result.onSuccess { dockView.setWeather(it) }
