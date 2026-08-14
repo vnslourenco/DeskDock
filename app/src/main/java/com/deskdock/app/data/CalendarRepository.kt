@@ -8,18 +8,50 @@ import android.provider.CalendarContract
 import com.deskdock.app.model.CalendarEvent
 
 class CalendarRepository(private val context: Context) {
-    data class CalendarState(val calendars: Int, val events: List<CalendarEvent>)
+    data class CalendarState(
+        val visibleCalendars: Int,
+        val events: List<CalendarEvent>,
+        val calendarNames: List<String>
+    )
 
     fun loadState(limit: Int = 5): CalendarState {
-        if (context.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) return CalendarState(0, emptyList())
-        return CalendarState(countCalendars(), loadUpcoming(limit))
+        if (context.checkSelfPermission(Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
+            return CalendarState(0, emptyList(), emptyList())
+        }
+        val names = loadVisibleCalendarNames()
+        return CalendarState(names.size, loadUpcoming(limit), names)
     }
 
-    private fun countCalendars(): Int = context.contentResolver.query(
-        CalendarContract.Calendars.CONTENT_URI,
-        arrayOf(CalendarContract.Calendars._ID),
-        null, null, null
-    )?.use { it.count } ?: 0
+    private fun loadVisibleCalendarNames(): List<String> {
+        val names = mutableListOf<String>()
+        val projection = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.VISIBLE
+        )
+        context.contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            projection,
+            "${CalendarContract.Calendars.VISIBLE}=1",
+            null,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME + " ASC"
+        )?.use { c ->
+            val display = c.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+            val account = c.getColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
+            while (c.moveToNext()) {
+                val d = if (display >= 0) c.getString(display)?.trim().orEmpty() else ""
+                val a = if (account >= 0) c.getString(account)?.trim().orEmpty() else ""
+                val label = when {
+                    d.isNotEmpty() -> d
+                    a.isNotEmpty() -> a
+                    else -> "Calendário"
+                }
+                if (label !in names) names += label
+            }
+        }
+        return names
+    }
 
     private fun loadUpcoming(limit: Int): List<CalendarEvent> {
         val now = System.currentTimeMillis()
@@ -28,15 +60,24 @@ class CalendarRepository(private val context: Context) {
             ContentUris.appendId(it, now)
             ContentUris.appendId(it, end)
         }.build()
+
         val projection = arrayOf(
             CalendarContract.Instances.TITLE,
             CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END,
             CalendarContract.Instances.ALL_DAY,
-            CalendarContract.Instances.EVENT_LOCATION
+            CalendarContract.Instances.EVENT_LOCATION,
+            CalendarContract.Instances.VISIBLE
         )
+
         val result = mutableListOf<CalendarEvent>()
-        context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
+        context.contentResolver.query(
+            uri,
+            projection,
+            "${CalendarContract.Instances.VISIBLE}=1",
+            null,
+            "${CalendarContract.Instances.BEGIN} ASC"
+        )?.use { c ->
             val title = c.getColumnIndexOrThrow(CalendarContract.Instances.TITLE)
             val begin = c.getColumnIndexOrThrow(CalendarContract.Instances.BEGIN)
             val finish = c.getColumnIndexOrThrow(CalendarContract.Instances.END)
@@ -44,7 +85,15 @@ class CalendarRepository(private val context: Context) {
             val location = c.getColumnIndexOrThrow(CalendarContract.Instances.EVENT_LOCATION)
             while (c.moveToNext() && result.size < limit) {
                 val name = c.getString(title)?.trim().orEmpty()
-                if (name.isNotEmpty()) result += CalendarEvent(name, c.getLong(begin), c.getLong(finish), c.getInt(allDay) == 1, c.getString(location))
+                if (name.isNotEmpty()) {
+                    result += CalendarEvent(
+                        title = name,
+                        startMillis = c.getLong(begin),
+                        endMillis = c.getLong(finish),
+                        allDay = c.getInt(allDay) == 1,
+                        location = c.getString(location)
+                    )
+                }
             }
         }
         return result
