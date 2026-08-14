@@ -47,7 +47,9 @@ class MainActivity : Activity() {
         setContentView(dockView)
         requestNeededPermissions()
         refreshAll()
-        handler.post(tick); handler.post(shift); handler.post(refresh)
+        handler.post(tick)
+        handler.post(shift)
+        handler.post(refresh)
     }
 
     override fun onResume() { super.onResume(); enterImmersive() }
@@ -66,7 +68,11 @@ class MainActivity : Activity() {
         if (requestCode == 42) refreshAll()
     }
 
-    private fun refreshAll() { refreshBattery(); refreshCalendar(); refreshWeather() }
+    private fun refreshAll() {
+        refreshBattery()
+        refreshCalendar()
+        refreshWeather()
+    }
 
     private fun refreshBattery() {
         val i = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
@@ -79,10 +85,29 @@ class MainActivity : Activity() {
     private fun refreshCalendar() {
         val allowed = checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
         dockView.setCalendarPermission(allowed)
-        if (!allowed) return dockView.setEvents(emptyList())
+        if (!allowed) {
+            dockView.setCalendarStatus("Permita acesso ao calendário")
+            return dockView.setEvents(emptyList())
+        }
+
+        dockView.setCalendarStatus("Atualizando agenda…")
         Thread {
-            val events = runCatching { calendarRepo.loadUpcoming(3) }.getOrDefault(emptyList())
-            runOnUiThread { dockView.setEvents(events) }
+            val state = runCatching { calendarRepo.loadState(5) }.getOrNull()
+            runOnUiThread {
+                if (state == null) {
+                    dockView.setEvents(emptyList())
+                    dockView.setCalendarStatus("Não foi possível ler a agenda")
+                } else {
+                    dockView.setEvents(state.events)
+                    dockView.setCalendarStatus(
+                        when {
+                            state.visibleCalendars == 0 -> "Nenhum calendário sincronizado no Android"
+                            state.events.isEmpty() -> "Sem compromissos nos próximos 7 dias"
+                            else -> "${state.visibleCalendars} calendário(s) sincronizado(s)"
+                        }
+                    )
+                }
+            }
         }.start()
     }
 
@@ -121,6 +146,11 @@ class MainActivity : Activity() {
 
     private fun enterImmersive() {
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
     }
 }
