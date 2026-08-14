@@ -14,7 +14,6 @@ import com.deskdock.app.util.WeatherCode
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.roundToInt
 import kotlin.random.Random
 
 class DockView(context: Context) : View(context) {
@@ -72,6 +71,7 @@ class DockView(context: Context) : View(context) {
             drawText(canvas, "${data.temperatureC}°", wx, wy + 84f*density, 64f*density, Color.WHITE, true)
             drawText(canvas, WeatherCode.labelPtBr(data.weatherCode), wx, wy + 116f*density, 19f*density, GREY)
             drawText(canvas, "Sensação ${data.feelsLikeC}°  ·  Máx ${data.todayMaxC}°  ·  Mín ${data.todayMinC}°", wx, wy + 146f*density, 15f*density, GREY)
+            drawText(canvas, "ECMWF IFS · Open-Meteo", wx, wy + 174f*density, 10f*density, DIM)
         }
 
         val batteryText = if (battery.charging) "⚡ ${battery.percent}% · carregando" else "Bateria ${battery.percent}%"
