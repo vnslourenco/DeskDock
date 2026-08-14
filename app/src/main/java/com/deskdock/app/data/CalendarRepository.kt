@@ -20,7 +20,7 @@ class CalendarRepository(private val context: Context) {
             return CalendarState(0, emptyList(), emptyList())
         }
         val names = loadVisibleCalendarNames()
-        return CalendarState(names.size, loadToday(limit), names)
+        return CalendarState(names.size, loadRemainingToday(limit), names)
     }
 
     private fun loadVisibleCalendarNames(): List<String> {
@@ -54,7 +54,8 @@ class CalendarRepository(private val context: Context) {
         return names
     }
 
-    private fun loadToday(limit: Int): List<CalendarEvent> {
+    private fun loadRemainingToday(limit: Int): List<CalendarEvent> {
+        val now = System.currentTimeMillis()
         val start = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -98,12 +99,18 @@ class CalendarRepository(private val context: Context) {
             val location = c.getColumnIndexOrThrow(CalendarContract.Instances.EVENT_LOCATION)
             while (c.moveToNext() && result.size < limit) {
                 val name = c.getString(title)?.trim().orEmpty()
-                if (name.isNotEmpty()) {
+                val eventEnd = c.getLong(finish)
+                val isAllDay = c.getInt(allDay) == 1
+
+                // Keep all-day events and meetings that are upcoming or currently in progress.
+                // Once a timed event has ended, it disappears from the dock agenda.
+                val stillRelevant = isAllDay || eventEnd > now
+                if (name.isNotEmpty() && stillRelevant) {
                     result += CalendarEvent(
                         title = name,
                         startMillis = c.getLong(begin),
-                        endMillis = c.getLong(finish),
-                        allDay = c.getInt(allDay) == 1,
+                        endMillis = eventEnd,
+                        allDay = isAllDay,
                         location = c.getString(location)
                     )
                 }
