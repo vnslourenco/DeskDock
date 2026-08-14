@@ -103,8 +103,8 @@ class MainActivity : Activity() {
                     dockView.setCalendarStatus(
                         when {
                             state.visibleCalendars == 0 -> "Nenhum calendário visível no Android"
-                            state.events.isEmpty() && source.isNotBlank() -> "Sem compromissos hoje · $source"
-                            state.events.isEmpty() -> "Sem compromissos hoje"
+                            state.events.isEmpty() && source.isNotBlank() -> "Sem mais compromissos hoje · $source"
+                            state.events.isEmpty() -> "Sem mais compromissos hoje"
                             else -> "${state.visibleCalendars} calendário(s) · $source"
                         }
                     )
