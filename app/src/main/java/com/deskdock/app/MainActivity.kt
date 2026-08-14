@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.Geocoder
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
@@ -15,7 +16,9 @@ import com.deskdock.app.data.CalendarRepository
 import com.deskdock.app.data.LocationRepository
 import com.deskdock.app.data.WeatherRepository
 import com.deskdock.app.model.BatteryInfo
+import com.deskdock.app.model.WeatherSnapshot
 import com.deskdock.app.ui.DockView
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var dockView: DockView
@@ -86,22 +89,34 @@ class MainActivity : Activity() {
     private fun refreshWeather() {
         dockView.setWeatherLoading(true)
         locationRepo.getCurrent { c ->
-            val lat = c?.latitude ?: -23.5505
-            val lon = c?.longitude ?: -46.6333
-            val locationLabel = if (c == null) {
-                "São Paulo · fallback (sem localização recente)"
-            } else if (c.accuracyMeters > 0) {
-                "Local atual · precisão ±${c.accuracyMeters.toInt()} m"
-            } else {
-                "Local atual"
+            if (c == null) {
+                dockView.setLocationLabel("São Paulo · fallback")
+                weatherRepo.fetch(-23.5505, -46.6333) { applyWeatherResult(it) }
+                return@getCurrent
             }
-            dockView.setLocationLabel(locationLabel)
-            weatherRepo.fetch(lat, lon) { result ->
-                dockView.setWeatherLoading(false)
-                result.onSuccess { dockView.setWeather(it) }
-                result.onFailure { dockView.setWeatherError() }
-            }
+
+            val precision = if (c.accuracyMeters > 0) " · ±${c.accuracyMeters.toInt()} m" else ""
+            dockView.setLocationLabel("Local atual$precision")
+            resolveLocationLabel(c.latitude, c.longitude, precision)
+            weatherRepo.fetch(c.latitude, c.longitude) { applyWeatherResult(it) }
         }
+    }
+
+    private fun applyWeatherResult(result: Result<WeatherSnapshot>) {
+        dockView.setWeatherLoading(false)
+        result.onSuccess { dockView.setWeather(it) }
+        result.onFailure { dockView.setWeatherError() }
+    }
+
+    private fun resolveLocationLabel(latitude: Double, longitude: Double, precision: String) {
+        Thread {
+            val label = runCatching {
+                @Suppress("DEPRECATION")
+                val address = Geocoder(this, Locale("pt", "BR")).getFromLocation(latitude, longitude, 1)?.firstOrNull()
+                address?.subLocality ?: address?.locality ?: address?.subAdminArea ?: "Local atual"
+            }.getOrDefault("Local atual")
+            runOnUiThread { dockView.setLocationLabel("$label$precision") }
+        }.start()
     }
 
     private fun enterImmersive() {
