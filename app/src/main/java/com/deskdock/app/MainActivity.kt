@@ -52,7 +52,7 @@ class MainActivity : Activity() {
         handler.post(refresh)
     }
 
-    override fun onResume() { super.onResume(); enterImmersive() }
+    override fun onResume() { super.onResume(); enterImmersive(); refreshCalendar() }
     override fun onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy() }
 
     private fun requestNeededPermissions() {
@@ -99,11 +99,13 @@ class MainActivity : Activity() {
                     dockView.setCalendarStatus("Não foi possível ler a agenda")
                 } else {
                     dockView.setEvents(state.events)
+                    val source = state.calendarNames.take(2).joinToString(" · ")
                     dockView.setCalendarStatus(
                         when {
-                            state.visibleCalendars == 0 -> "Nenhum calendário sincronizado no Android"
+                            state.visibleCalendars == 0 -> "Nenhum calendário visível no Android"
+                            state.events.isEmpty() && source.isNotBlank() -> "Sem eventos · $source"
                             state.events.isEmpty() -> "Sem compromissos nos próximos 7 dias"
-                            else -> "${state.visibleCalendars} calendário(s) sincronizado(s)"
+                            else -> "${state.visibleCalendars} calendário(s) · $source"
                         }
                     )
                 }
