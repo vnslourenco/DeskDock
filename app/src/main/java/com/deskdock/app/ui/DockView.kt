@@ -5,7 +5,6 @@ import android.graphics.*
 import android.view.MotionEvent
 import android.view.View
 import com.deskdock.app.model.*
-import com.deskdock.app.util.WeatherCode
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.cos
@@ -51,7 +50,7 @@ class DockView(context: Context) : View(context) {
 
         val pad=w*.012f
         val gap=w*.010f
-        val leftW=w*.285f
+        val leftW=w*.315f
         val lx=pad
         val rx=lx+leftW+gap
         val right=w-pad
@@ -72,22 +71,28 @@ class DockView(context: Context) : View(context) {
     }
 
     private fun topLeft(c:Canvas,r:RectF,h:Float){
-        val split=r.left+r.width()*.62f
+        val split=r.left+r.width()*.64f
         line(c,split,r.top+h*.018f,split,r.bottom-h*.018f,h)
-        text(c,time(),r.left+r.width()*.035f,r.top+r.height()*.47f,h*.120f,WHITE,true)
-        text(c,date(),r.left+r.width()*.04f,r.top+r.height()*.78f,h*.034f,MUTED,true)
+
+        val clockX=r.left+r.width()*.035f
+        text(c,time(),clockX,r.top+r.height()*.47f,h*.120f,WHITE,true)
+
+        val dateX=r.left+r.width()*.04f
+        val dateMaxWidth=split-dateX-h*.018f
+        fitText(c,date(),dateX,r.top+r.height()*.78f,h*.034f,h*.025f,dateMaxWidth,MUTED,true)
+
         val bx=r.left+r.width()*.04f; val by=r.bottom-h*.025f
         battery(c,bx,by,h*.020f)
 
         weather?.let{v->
             val cx=split+(r.right-split)*.50f
-            textCenter(c,"ATUAL",cx,r.top+r.height()*.18f,h*.024f,DIM,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.39f,h*.035f)
-            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.69f,h*.068f,WHITE,true)
-            textCenter(c,"Sensação ${v.feelsLikeC}°",cx,r.top+r.height()*.88f,h*.028f,MUTED,true)
+            textCenter(c,"ATUAL",cx,r.top+r.height()*.17f,h*.026f,DIM,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.38f,h*.040f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.69f,h*.076f,WHITE,true)
+            textCenter(c,"Sensação ${v.feelsLikeC}°",cx,r.top+r.height()*.89f,h*.031f,MUTED,true)
         }?:run{
             val msg=if(error)"--" else "…"
-            textCenter(c,msg,split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.055f,MUTED,true)
+            textCenter(c,msg,split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.060f,MUTED,true)
         }
     }
 
@@ -95,14 +100,14 @@ class DockView(context: Context) : View(context) {
         val x=r.left+r.width()*.035f
         header(c,"PRÓXIMAS HORAS",x,r.top+r.height()*.12f,h*.030f)
         textRight(c,"↻",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.034f,DIM,true)
-        val a=weather?.hourly?.take(6).orEmpty(); if(a.isEmpty()) return
-        val usable=r.width()*.93f; val cw=usable/6f; val start=x
+        val a=weather?.hourly?.take(5).orEmpty(); if(a.isEmpty()) return
+        val usable=r.width()*.92f; val cw=usable/5f; val start=x
         a.forEachIndexed{i,v->
             val cx=start+cw*i+cw/2f
-            textCenter(c,v.hour,cx,r.top+r.height()*.28f,h*.038f,WHITE,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.46f,h*.034f)
-            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.046f,WHITE,true)
-            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.89f,h*.038f,BLUE,true)
+            textCenter(c,v.hour,cx,r.top+r.height()*.28f,h*.045f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.46f,h*.039f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.047f,WHITE,true)
+            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.89f,h*.045f,BLUE,true)
         }
     }
 
@@ -112,11 +117,11 @@ class DockView(context: Context) : View(context) {
         weather?.nextDays?.take(3)?.forEachIndexed{i,v->
             val colW=r.width()*.89f/3f; val cx=x+colW*i+colW/2f
             if(i>0) line(c,x+colW*i,r.top+r.height()*.17f,x+colW*i,r.bottom-r.height()*.08f,h)
-            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.25f,h*.045f,WHITE,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.43f,h*.039f)
-            textCenter(c,"${v.maxC}°",cx,r.top+r.height()*.64f,h*.054f,WHITE,true)
-            textCenter(c,"${v.minC}°",cx,r.top+r.height()*.77f,h*.043f,MUTED,true)
-            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.91f,h*.041f,BLUE,true)
+            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.25f,h*.047f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.43f,h*.041f)
+            textCenter(c,"${v.maxC}°",cx,r.top+r.height()*.64f,h*.055f,WHITE,true)
+            textCenter(c,"${v.minC}°",cx,r.top+r.height()*.77f,h*.045f,MUTED,true)
+            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.91f,h*.044f,BLUE,true)
         }
     }
 
@@ -135,7 +140,7 @@ class DockView(context: Context) : View(context) {
             if(i>0) line(c,x,rowTop,r.right-r.width()*.035f,rowTop,h)
             if(i==0){fill.color=ACCENT;c.drawRoundRect(RectF(x-r.width()*.008f,rowTop+h*.010f,r.right-r.width()*.03f,rowTop+rowH-h*.008f),h*.014f,h*.014f,fill)}
             text(c,eventTime(e),x,rowTop+rowH*.63f,h*.048f,if(i==0)BLUE else WHITE,true)
-            text(c,ell(e.title,38),x+r.width()*.22f,rowTop+rowH*.63f,h*.046f,if(i==0)WHITE else MUTED,true)
+            text(c,ell(e.title,34),x+r.width()*.23f,rowTop+rowH*.63f,h*.046f,if(i==0)WHITE else MUTED,true)
         }
     }
 
@@ -146,6 +151,7 @@ class DockView(context: Context) : View(context) {
     private fun text(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x,y,q)}
     private fun textCenter(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s)/2f,y,q)}
     private fun textRight(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s),y,q)}
+    private fun fitText(c:Canvas,s:String,x:Float,y:Float,maxSize:Float,minSize:Float,maxWidth:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;var z=maxSize;q.textSize=z;while(q.measureText(s)>maxWidth && z>minSize){z-=1f;q.textSize=z};q.color=col;c.drawText(s,x,y,q)}
 
     private fun icon(c:Canvas,code:Int,x:Float,y:Float,r:Float){
         stroke.strokeWidth=(r*.10f).coerceAtLeast(1.8f);stroke.strokeCap=Paint.Cap.ROUND;stroke.color=ICON
