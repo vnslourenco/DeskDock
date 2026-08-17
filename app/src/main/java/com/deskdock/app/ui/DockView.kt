@@ -41,7 +41,6 @@ class DockView(context: Context) : View(context) {
     fun setCalendarPermission(v:Boolean){calPermission=v;invalidate()}
     fun setCalendarStatus(v:String){calStatus=v;invalidate()}
 
-    // Anti burn-in / image-retention: shift the whole UI by a few pixels periodically.
     fun shiftForBurnInProtection(){sx=Random.nextInt(-7,8).toFloat();sy=Random.nextInt(-5,6).toFloat();invalidate()}
 
     override fun onDraw(c:Canvas){
@@ -75,17 +74,17 @@ class DockView(context: Context) : View(context) {
     private fun topLeft(c:Canvas,r:RectF,h:Float){
         val split=r.left+r.width()*.62f
         line(c,split,r.top+h*.018f,split,r.bottom-h*.018f,h)
-        text(c,time(),r.left+r.width()*.035f,r.top+r.height()*.49f,h*.120f,WHITE,true)
-        text(c,date(),r.left+r.width()*.04f,r.top+r.height()*.78f,h*.025f,MUTED,true)
+        text(c,time(),r.left+r.width()*.035f,r.top+r.height()*.47f,h*.120f,WHITE,true)
+        text(c,date(),r.left+r.width()*.04f,r.top+r.height()*.78f,h*.034f,MUTED,true)
         val bx=r.left+r.width()*.04f; val by=r.bottom-h*.025f
-        battery(c,bx,by,h*.018f)
+        battery(c,bx,by,h*.020f)
 
         weather?.let{v->
             val cx=split+(r.right-split)*.50f
-            textCenter(c,"ATUAL",cx,r.top+r.height()*.20f,h*.020f,DIM,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.40f,h*.030f)
-            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.065f,WHITE,true)
-            textCenter(c,"Sens. ${v.feelsLikeC}°",cx,r.top+r.height()*.86f,h*.020f,MUTED,true)
+            textCenter(c,"ATUAL",cx,r.top+r.height()*.18f,h*.024f,DIM,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.39f,h*.035f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.69f,h*.068f,WHITE,true)
+            textCenter(c,"Sensação ${v.feelsLikeC}°",cx,r.top+r.height()*.88f,h*.028f,MUTED,true)
         }?:run{
             val msg=if(error)"--" else "…"
             textCenter(c,msg,split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.055f,MUTED,true)
@@ -94,38 +93,38 @@ class DockView(context: Context) : View(context) {
 
     private fun hourly(c:Canvas,r:RectF,h:Float){
         val x=r.left+r.width()*.035f
-        header(c,"PRÓXIMAS HORAS",x,r.top+r.height()*.12f,h*.026f)
-        textRight(c,"↻",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.030f,DIM,true)
+        header(c,"PRÓXIMAS HORAS",x,r.top+r.height()*.12f,h*.030f)
+        textRight(c,"↻",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.034f,DIM,true)
         val a=weather?.hourly?.take(6).orEmpty(); if(a.isEmpty()) return
         val usable=r.width()*.93f; val cw=usable/6f; val start=x
         a.forEachIndexed{i,v->
             val cx=start+cw*i+cw/2f
-            textCenter(c,v.hour,cx,r.top+r.height()*.28f,h*.023f,MUTED,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.46f,h*.028f)
-            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.045f,WHITE,true)
-            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.88f,h*.021f,BLUE,true)
+            textCenter(c,v.hour,cx,r.top+r.height()*.28f,h*.038f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.46f,h*.034f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.046f,WHITE,true)
+            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.89f,h*.038f,BLUE,true)
         }
     }
 
     private fun daily(c:Canvas,r:RectF,h:Float){
         val x=r.left+r.width()*.055f
-        header(c,"PRÓXIMOS 3 DIAS",x,r.top+r.height()*.095f,h*.024f)
+        header(c,"PRÓXIMOS 3 DIAS",x,r.top+r.height()*.095f,h*.029f)
         weather?.nextDays?.take(3)?.forEachIndexed{i,v->
             val colW=r.width()*.89f/3f; val cx=x+colW*i+colW/2f
             if(i>0) line(c,x+colW*i,r.top+r.height()*.17f,x+colW*i,r.bottom-r.height()*.08f,h)
-            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.25f,h*.032f,WHITE,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.43f,h*.032f)
-            textCenter(c,"${v.maxC}°",cx,r.top+r.height()*.64f,h*.052f,WHITE,true)
-            textCenter(c,"${v.minC}°",cx,r.top+r.height()*.77f,h*.031f,MUTED,true)
-            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.90f,h*.022f,BLUE,true)
+            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.25f,h*.045f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.43f,h*.039f)
+            textCenter(c,"${v.maxC}°",cx,r.top+r.height()*.64f,h*.054f,WHITE,true)
+            textCenter(c,"${v.minC}°",cx,r.top+r.height()*.77f,h*.043f,MUTED,true)
+            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.91f,h*.041f,BLUE,true)
         }
     }
 
     private fun agenda(c:Canvas,r:RectF,h:Float){
         val x=r.left+r.width()*.035f
-        header(c,"AGENDA DE HOJE",x,r.top+r.height()*.10f,h*.026f)
+        header(c,"AGENDA DE HOJE",x,r.top+r.height()*.10f,h*.030f)
         if(events.isEmpty()){
-            text(c,if(!calPermission)"Permita acesso ao calendário" else calStatus,x,r.top+r.height()*.48f,h*.030f,MUTED,true)
+            text(c,if(!calPermission)"Permita acesso ao calendário" else calStatus,x,r.top+r.height()*.48f,h*.034f,MUTED,true)
             return
         }
         val visible=events.take(4)
@@ -134,9 +133,9 @@ class DockView(context: Context) : View(context) {
         visible.forEachIndexed{i,e->
             val rowTop=top+i*rowH
             if(i>0) line(c,x,rowTop,r.right-r.width()*.035f,rowTop,h)
-            if(i==0){fill.color=ACCENT;c.drawRoundRect(RectF(x-r.width()*.008f,rowTop+h*.012f,r.right-r.width()*.03f,rowTop+rowH-h*.010f),h*.014f,h*.014f,fill)}
-            text(c,eventTime(e),x,rowTop+rowH*.61f,h*.036f,if(i==0)BLUE else MUTED,true)
-            text(c,ell(e.title,42),x+r.width()*.20f,rowTop+rowH*.61f,h*.034f,if(i==0)WHITE else MUTED,true)
+            if(i==0){fill.color=ACCENT;c.drawRoundRect(RectF(x-r.width()*.008f,rowTop+h*.010f,r.right-r.width()*.03f,rowTop+rowH-h*.008f),h*.014f,h*.014f,fill)}
+            text(c,eventTime(e),x,rowTop+rowH*.63f,h*.048f,if(i==0)BLUE else WHITE,true)
+            text(c,ell(e.title,38),x+r.width()*.22f,rowTop+rowH*.63f,h*.046f,if(i==0)WHITE else MUTED,true)
         }
     }
 
