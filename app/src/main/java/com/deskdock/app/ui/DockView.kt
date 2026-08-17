@@ -13,21 +13,160 @@ import kotlin.math.sin
 import kotlin.random.Random
 
 class DockView(context: Context) : View(context) {
- var onRefreshRequested:(()->Unit)?=null
- private val reg=Paint(1).apply{typeface=Typeface.create("sans-serif",0)};private val med=Paint(1).apply{typeface=Typeface.create("sans-serif-medium",0)};private val fill=Paint(1);private val stroke=Paint(1).apply{style=Paint.Style.STROKE}
- private var now=System.currentTimeMillis();private var weather:WeatherSnapshot?=null;private var battery=BatteryInfo(0,false);private var events:List<CalendarEvent> = emptyList();private var location="Local atual";private var calStatus="Atualizando agenda…";private var calPermission=true;private var loading=false;private var error=false;private var sx=0f;private var sy=0f
- fun setNow(v:Long){now=v;invalidate()};fun setWeather(v:WeatherSnapshot){weather=v;error=false;invalidate()};fun setWeatherLoading(v:Boolean){loading=v;invalidate()};fun setWeatherError(){error=true;invalidate()};fun setBattery(v:BatteryInfo){battery=v;invalidate()};fun setEvents(v:List<CalendarEvent>){events=v;invalidate()};fun setLocationLabel(v:String){location=v;invalidate()};fun setCalendarPermission(v:Boolean){calPermission=v;invalidate()};fun setCalendarStatus(v:String){calStatus=v;invalidate()};fun shiftForBurnInProtection(){sx=Random.nextInt(-4,5).toFloat();sy=Random.nextInt(-3,4).toFloat();invalidate()}
- override fun onDraw(c:Canvas){super.onDraw(c);c.drawColor(Color.BLACK);c.save();c.translate(sx,sy);val w=width.toFloat();val h=height.toFloat();if(w<=0||h<=0){c.restore();return};val pad=w*.030f;val gap=w*.014f;val leftW=w*.315f;val lx=pad;val rx=lx+leftW+gap;val right=w-pad;val bottom=h*.945f;text(c,time(),lx,h*.145f,h*.112f,WHITE,true);text(c,date(),lx,h*.202f,h*.030f,MUTED);battery(c,right-w*.102f,h*.070f,h*.019f);textRight(c,"↻",right,h*.073f,h*.030f,DIM,true);val wp=RectF(lx,h*.255f,lx+leftW,bottom);val hc=RectF(rx,h*.055f,right,h*.365f);val dc=RectF(rx,h*.390f,right,h*.635f);val ac=RectF(rx,h*.660f,right,bottom);weatherPanel(c,wp,h);surface(c,hc,h);surface(c,dc,h);surface(c,ac,h);hourly(c,hc,h);daily(c,dc,h);agenda(c,ac,h);c.restore()}
- private fun weatherPanel(c:Canvas,r:RectF,h:Float){surface(c,r,h);val x=r.left+r.width()*.075f;val rr=r.right-r.width()*.075f;text(c,shortLocation(),x,r.top+r.height()*.085f,h*.016f,DIM,true);weather?.let{v->val heroY=r.top+r.height()*.315f;icon(c,v.weatherCode,x+h*.060f,heroY,h*.047f);text(c,"${v.temperatureC}°",x+h*.135f,heroY+h*.037f,h*.090f,WHITE,true);text(c,WeatherCode.labelPtBr(v.weatherCode),x,r.top+r.height()*.535f,h*.031f,WHITE,true);text(c,"Sensação de ${v.feelsLikeC}°",x,r.top+r.height()*.615f,h*.023f,MUTED);val sep=r.top+r.height()*.715f;line(c,x,sep,rr,sep,h);text(c,"HOJE",x,sep+h*.042f,h*.014f,DIM,true);text(c,"${v.todayMaxC}°",x,sep+h*.092f,h*.034f,WHITE,true);text(c,"máx",x+h*.052f,sep+h*.092f,h*.018f,MUTED);text(c,"${v.todayMinC}°",x+r.width()*.48f,sep+h*.092f,h*.034f,WHITE,true);text(c,"mín",x+r.width()*.48f+h*.052f,sep+h*.092f,h*.018f,MUTED);text(c,"ECMWF IFS  ·  Open-Meteo",x,r.bottom-h*.025f,h*.014f,DIM)}?:run{val msg=if(error)"Clima indisponível" else if(loading)"Atualizando clima…" else "Aguardando clima";text(c,msg,x,r.top+r.height()*.45f,h*.025f,MUTED,true)}}
- private fun hourly(c:Canvas,r:RectF,h:Float){val x=r.left+r.width()*.04f;header(c,"PRÓXIMAS HORAS",x,r.top+r.height()*.13f,h);val a=weather?.hourly?.take(6).orEmpty();val cw=r.width()*.92f/6;a.forEachIndexed{i,v->val cx=x+cw*i+cw/2;val y=r.top+r.height()*.31f;textCenter(c,v.hour,cx,y,h*.019f,MUTED,true);icon(c,v.weatherCode,cx,y+r.height()*.20f,h*.021f);textCenter(c,"${v.temperatureC}°",cx,y+r.height()*.44f,h*.035f,WHITE,true);rain(c,v.rainChance,cx,y+r.height()*.60f,h)}}
- private fun daily(c:Canvas,r:RectF,h:Float){val x=r.left+r.width()*.04f;header(c,"PRÓXIMOS 3 DIAS",x,r.top+r.height()*.16f,h);weather?.nextDays?.take(3)?.forEachIndexed{i,v->val y=r.top+r.height()*(.39f+i*.255f);if(i>0)line(c,x,y-r.height()*.13f,r.right-r.width()*.04f,y-r.height()*.13f,h);text(c,v.dayLabel,x,y,h*.027f,WHITE,true);icon(c,v.weatherCode,x+r.width()*.17f,y-h*.008f,h*.017f);text(c,WeatherCode.labelPtBr(v.weatherCode),x+r.width()*.215f,y,h*.019f,MUTED);rainLeft(c,v.rainChance,r.right-r.width()*.25f,y,h);textRight(c,"${v.maxC}°",r.right-r.width()*.09f,y,h*.028f,WHITE,true);textRight(c,"${v.minC}°",r.right-r.width()*.035f,y,h*.028f,MUTED,true)}}
- private fun agenda(c:Canvas,r:RectF,h:Float){val x=r.left+r.width()*.04f;header(c,"AGENDA",x,r.top+r.height()*.15f,h);textRight(c,"HOJE",r.right-r.width()*.04f,r.top+r.height()*.15f,h*.014f,DIM,true);if(events.isEmpty()){text(c,if(!calPermission)"Permita acesso ao calendário" else calStatus,x,r.top+r.height()*.55f,h*.021f,MUTED,true);return};val rowH=r.height()*.245f;val start=r.top+r.height()*.36f;events.take(3).forEachIndexed{i,e->val cy=start+i*rowH;if(i>0)line(c,x,cy-rowH*.48f,r.right-r.width()*.04f,cy-rowH*.48f,h);if(i==0){fill.color=ACCENT;c.drawRoundRect(RectF(x-r.width()*.012f,cy-h*.030f,r.right-r.width()*.035f,cy+h*.027f),h*.014f,h*.014f,fill)};text(c,eventTime(e),x,cy,h*.019f,if(i==0)BLUE else MUTED,true);text(c,ell(e.title,44),x+r.width()*.19f,cy,h*.022f,if(i==0)WHITE else MUTED,true)}}
- private fun surface(c:Canvas,r:RectF,h:Float){fill.color=CARD;c.drawRoundRect(r,h*.024f,h*.024f,fill);stroke.strokeWidth=(h*.0011f).coerceAtLeast(1f);stroke.color=BORDER;c.drawRoundRect(r,h*.024f,h*.024f,stroke)};private fun header(c:Canvas,s:String,x:Float,y:Float,h:Float)=text(c,s,x,y,h*.016f,DIM,true)
- private fun rain(c:Canvas,n:Int,x:Float,y:Float,h:Float){fill.color=BLUE;c.drawCircle(x-h*.024f,y-h*.005f,h*.0038f,fill);textCenter(c,"${n}%",x+h*.008f,y,h*.017f,BLUE,true)};private fun rainLeft(c:Canvas,n:Int,x:Float,y:Float,h:Float){fill.color=BLUE;c.drawCircle(x,y-h*.006f,h*.0038f,fill);text(c,"${n}%",x+h*.014f,y,h*.017f,BLUE,true)}
- private fun icon(c:Canvas,code:Int,x:Float,y:Float,r:Float){stroke.strokeWidth=(r*.10f).coerceAtLeast(1.5f);stroke.strokeCap=Paint.Cap.ROUND;stroke.color=ICON;if(code==0){c.drawCircle(x,y,r*.46f,stroke);for(i in 0..7){val a=Math.toRadians(i*45.0);c.drawLine(x+cos(a).toFloat()*r*.67f,y+sin(a).toFloat()*r*.67f,x+cos(a).toFloat()*r*.90f,y+sin(a).toFloat()*r*.90f,stroke)};return};if(code in 1..3)c.drawCircle(x-r*.45f,y-r*.35f,r*.32f,stroke);val q=Path();q.moveTo(x-r*.78f,y+r*.22f);q.cubicTo(x-r*.82f,y-r*.20f,x-r*.38f,y-r*.32f,x-r*.20f,y-r*.18f);q.cubicTo(x,y-r*.68f,x+r*.56f,y-r*.50f,x+r*.56f,y-r*.10f);q.cubicTo(x+r*.90f,y-r*.08f,x+r*.92f,y+r*.36f,x+r*.56f,y+r*.36f);q.lineTo(x-r*.56f,y+r*.36f);c.drawPath(q,stroke);if(code in 51..82)for(i in -1..1)c.drawLine(x+i*r*.3f,y+r*.55f,x+i*r*.3f-r*.1f,y+r*.9f,stroke)}
- private fun battery(c:Canvas,x:Float,y:Float,s:Float){val bw=s*1.45f;val bh=s*.65f;stroke.strokeWidth=1.5f;stroke.color=if(battery.charging)GREEN else MUTED;c.drawRoundRect(RectF(x,y-bh,x+bw,y),bh*.2f,bh*.2f,stroke);fill.color=stroke.color;val f=battery.percent.coerceIn(0,100)/100f;c.drawRect(x+3,y-bh+3,x+3+(bw-6)*f,y-3,fill);text(c,"${battery.percent}%",x+bw+s*.45f,y,s,MUTED,true)}
- private fun line(c:Canvas,x1:Float,y1:Float,x2:Float,y2:Float,h:Float){stroke.strokeWidth=(h*.0011f).coerceAtLeast(1f);stroke.color=BORDER;c.drawLine(x1,y1,x2,y2,stroke)};private fun text(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x,y,q)};private fun textCenter(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s)/2,y,q)};private fun textRight(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s),y,q)}
- private fun time()=SimpleDateFormat("HH:mm",Locale("pt","BR")).format(Date(now));private fun date()=SimpleDateFormat("EEEE, d 'de' MMMM",Locale("pt","BR")).format(Date(now)).replaceFirstChar{it.uppercase()};private fun eventTime(e:CalendarEvent)=if(e.allDay)"Dia todo" else SimpleDateFormat("HH:mm",Locale("pt","BR")).format(Date(e.startMillis));private fun shortLocation():String{val b=location.substringBefore(" · ±");return if(b.length>31)b.take(30)+"…" else b};private fun ell(s:String,n:Int)=if(s.length<=n)s else s.take(n-1)+"…"
- override fun onTouchEvent(e:MotionEvent):Boolean{if(e.action==MotionEvent.ACTION_UP&&e.x>width*.88f&&e.y<height*.14f){onRefreshRequested?.invoke();performClick()};return true};override fun performClick():Boolean{super.performClick();return true}
- companion object{val WHITE=Color.rgb(244,244,248);val MUTED=Color.rgb(159,159,171);val DIM=Color.rgb(87,87,99);val CARD=Color.rgb(9,9,12);val BORDER=Color.rgb(29,29,36);val BLUE=Color.rgb(105,164,255);val GREEN=Color.rgb(100,220,145);val ICON=Color.rgb(225,225,232);val ACCENT=Color.rgb(16,27,44)}
+    var onRefreshRequested:(()->Unit)?=null
+    private val reg=Paint(1).apply{typeface=Typeface.create("sans-serif",Typeface.NORMAL)}
+    private val med=Paint(1).apply{typeface=Typeface.create("sans-serif-medium",Typeface.NORMAL)}
+    private val fill=Paint(1)
+    private val stroke=Paint(1).apply{style=Paint.Style.STROKE}
+
+    private var now=System.currentTimeMillis()
+    private var weather:WeatherSnapshot?=null
+    private var battery=BatteryInfo(0,false)
+    private var events:List<CalendarEvent> = emptyList()
+    private var location="Local atual"
+    private var calStatus="Atualizando agenda…"
+    private var calPermission=true
+    private var loading=false
+    private var error=false
+    private var sx=0f
+    private var sy=0f
+
+    fun setNow(v:Long){now=v;invalidate()}
+    fun setWeather(v:WeatherSnapshot){weather=v;error=false;invalidate()}
+    fun setWeatherLoading(v:Boolean){loading=v;invalidate()}
+    fun setWeatherError(){error=true;invalidate()}
+    fun setBattery(v:BatteryInfo){battery=v;invalidate()}
+    fun setEvents(v:List<CalendarEvent>){events=v;invalidate()}
+    fun setLocationLabel(v:String){location=v;invalidate()}
+    fun setCalendarPermission(v:Boolean){calPermission=v;invalidate()}
+    fun setCalendarStatus(v:String){calStatus=v;invalidate()}
+
+    // Anti burn-in / image-retention: shift the whole UI by a few pixels periodically.
+    fun shiftForBurnInProtection(){sx=Random.nextInt(-7,8).toFloat();sy=Random.nextInt(-5,6).toFloat();invalidate()}
+
+    override fun onDraw(c:Canvas){
+        super.onDraw(c)
+        c.drawColor(Color.BLACK)
+        c.save(); c.translate(sx,sy)
+        val w=width.toFloat(); val h=height.toFloat(); if(w<=0||h<=0){c.restore();return}
+
+        val pad=w*.012f
+        val gap=w*.010f
+        val leftW=w*.285f
+        val lx=pad
+        val rx=lx+leftW+gap
+        val right=w-pad
+        val top=h*.028f
+        val bottom=h*.965f
+
+        val leftTop=RectF(lx,top,lx+leftW,h*.305f)
+        val leftBottom=RectF(lx,h*.325f,lx+leftW,bottom)
+        val rightTop=RectF(rx,top,right,h*.455f)
+        val rightBottom=RectF(rx,h*.475f,right,bottom)
+
+        surface(c,leftTop,h); surface(c,leftBottom,h); surface(c,rightTop,h); surface(c,rightBottom,h)
+        topLeft(c,leftTop,h)
+        daily(c,leftBottom,h)
+        hourly(c,rightTop,h)
+        agenda(c,rightBottom,h)
+        c.restore()
+    }
+
+    private fun topLeft(c:Canvas,r:RectF,h:Float){
+        val split=r.left+r.width()*.62f
+        line(c,split,r.top+h*.018f,split,r.bottom-h*.018f,h)
+        text(c,time(),r.left+r.width()*.035f,r.top+r.height()*.49f,h*.120f,WHITE,true)
+        text(c,date(),r.left+r.width()*.04f,r.top+r.height()*.78f,h*.025f,MUTED,true)
+        val bx=r.left+r.width()*.04f; val by=r.bottom-h*.025f
+        battery(c,bx,by,h*.018f)
+
+        weather?.let{v->
+            val cx=split+(r.right-split)*.50f
+            textCenter(c,"ATUAL",cx,r.top+r.height()*.20f,h*.020f,DIM,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.40f,h*.030f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.065f,WHITE,true)
+            textCenter(c,"Sens. ${v.feelsLikeC}°",cx,r.top+r.height()*.86f,h*.020f,MUTED,true)
+        }?:run{
+            val msg=if(error)"--" else "…"
+            textCenter(c,msg,split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.055f,MUTED,true)
+        }
+    }
+
+    private fun hourly(c:Canvas,r:RectF,h:Float){
+        val x=r.left+r.width()*.035f
+        header(c,"PRÓXIMAS HORAS",x,r.top+r.height()*.12f,h*.026f)
+        textRight(c,"↻",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.030f,DIM,true)
+        val a=weather?.hourly?.take(6).orEmpty(); if(a.isEmpty()) return
+        val usable=r.width()*.93f; val cw=usable/6f; val start=x
+        a.forEachIndexed{i,v->
+            val cx=start+cw*i+cw/2f
+            textCenter(c,v.hour,cx,r.top+r.height()*.28f,h*.023f,MUTED,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.46f,h*.028f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.70f,h*.045f,WHITE,true)
+            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.88f,h*.021f,BLUE,true)
+        }
+    }
+
+    private fun daily(c:Canvas,r:RectF,h:Float){
+        val x=r.left+r.width()*.055f
+        header(c,"PRÓXIMOS 3 DIAS",x,r.top+r.height()*.095f,h*.024f)
+        weather?.nextDays?.take(3)?.forEachIndexed{i,v->
+            val colW=r.width()*.89f/3f; val cx=x+colW*i+colW/2f
+            if(i>0) line(c,x+colW*i,r.top+r.height()*.17f,x+colW*i,r.bottom-r.height()*.08f,h)
+            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.25f,h*.032f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.43f,h*.032f)
+            textCenter(c,"${v.maxC}°",cx,r.top+r.height()*.64f,h*.052f,WHITE,true)
+            textCenter(c,"${v.minC}°",cx,r.top+r.height()*.77f,h*.031f,MUTED,true)
+            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.90f,h*.022f,BLUE,true)
+        }
+    }
+
+    private fun agenda(c:Canvas,r:RectF,h:Float){
+        val x=r.left+r.width()*.035f
+        header(c,"AGENDA DE HOJE",x,r.top+r.height()*.10f,h*.026f)
+        if(events.isEmpty()){
+            text(c,if(!calPermission)"Permita acesso ao calendário" else calStatus,x,r.top+r.height()*.48f,h*.030f,MUTED,true)
+            return
+        }
+        val visible=events.take(4)
+        val top=r.top+r.height()*.18f
+        val rowH=r.height()*.18f
+        visible.forEachIndexed{i,e->
+            val rowTop=top+i*rowH
+            if(i>0) line(c,x,rowTop,r.right-r.width()*.035f,rowTop,h)
+            if(i==0){fill.color=ACCENT;c.drawRoundRect(RectF(x-r.width()*.008f,rowTop+h*.012f,r.right-r.width()*.03f,rowTop+rowH-h*.010f),h*.014f,h*.014f,fill)}
+            text(c,eventTime(e),x,rowTop+rowH*.61f,h*.036f,if(i==0)BLUE else MUTED,true)
+            text(c,ell(e.title,42),x+r.width()*.20f,rowTop+rowH*.61f,h*.034f,if(i==0)WHITE else MUTED,true)
+        }
+    }
+
+    private fun surface(c:Canvas,r:RectF,h:Float){fill.color=CARD;c.drawRoundRect(r,h*.020f,h*.020f,fill);stroke.strokeWidth=(h*.0012f).coerceAtLeast(1f);stroke.color=BORDER;c.drawRoundRect(r,h*.020f,h*.020f,stroke)}
+    private fun header(c:Canvas,s:String,x:Float,y:Float,z:Float)=text(c,s,x,y,z,WHITE,true)
+    private fun battery(c:Canvas,x:Float,y:Float,s:Float){val bw=s*1.45f;val bh=s*.65f;stroke.strokeWidth=1.5f;stroke.color=if(battery.charging)GREEN else MUTED;c.drawRoundRect(RectF(x,y-bh,x+bw,y),bh*.2f,bh*.2f,stroke);fill.color=stroke.color;val f=battery.percent.coerceIn(0,100)/100f;c.drawRect(x+3,y-bh+3,x+3+(bw-6)*f,y-3,fill);text(c,"${battery.percent}%",x+bw+s*.45f,y,s,MUTED,true)}
+    private fun line(c:Canvas,x1:Float,y1:Float,x2:Float,y2:Float,h:Float){stroke.strokeWidth=(h*.0011f).coerceAtLeast(1f);stroke.color=BORDER;c.drawLine(x1,y1,x2,y2,stroke)}
+    private fun text(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x,y,q)}
+    private fun textCenter(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s)/2f,y,q)}
+    private fun textRight(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s),y,q)}
+
+    private fun icon(c:Canvas,code:Int,x:Float,y:Float,r:Float){
+        stroke.strokeWidth=(r*.10f).coerceAtLeast(1.8f);stroke.strokeCap=Paint.Cap.ROUND;stroke.color=ICON
+        if(code==0){c.drawCircle(x,y,r*.46f,stroke);for(i in 0..7){val a=Math.toRadians(i*45.0);c.drawLine(x+cos(a).toFloat()*r*.67f,y+sin(a).toFloat()*r*.67f,x+cos(a).toFloat()*r*.90f,y+sin(a).toFloat()*r*.90f,stroke)};return}
+        if(code in 1..3)c.drawCircle(x-r*.45f,y-r*.35f,r*.32f,stroke)
+        val q=Path();q.moveTo(x-r*.78f,y+r*.22f);q.cubicTo(x-r*.82f,y-r*.20f,x-r*.38f,y-r*.32f,x-r*.20f,y-r*.18f);q.cubicTo(x,y-r*.68f,x+r*.56f,y-r*.50f,x+r*.56f,y-r*.10f);q.cubicTo(x+r*.90f,y-r*.08f,x+r*.92f,y+r*.36f,x+r*.56f,y+r*.36f);q.lineTo(x-r*.56f,y+r*.36f);c.drawPath(q,stroke)
+        if(code in 51..82)for(i in -1..1)c.drawLine(x+i*r*.3f,y+r*.55f,x+i*r*.3f-r*.1f,y+r*.9f,stroke)
+    }
+
+    private fun time()=SimpleDateFormat("HH:mm",Locale("pt","BR")).format(Date(now))
+    private fun date()=SimpleDateFormat("EEEE, d 'de' MMMM",Locale("pt","BR")).format(Date(now)).replaceFirstChar{it.uppercase()}
+    private fun eventTime(e:CalendarEvent)=if(e.allDay)"Dia todo" else SimpleDateFormat("HH:mm",Locale("pt","BR")).format(Date(e.startMillis))
+    private fun ell(s:String,n:Int)=if(s.length<=n)s else s.take(n-1)+"…"
+
+    override fun onTouchEvent(e:MotionEvent):Boolean{if(e.action==MotionEvent.ACTION_UP&&e.x>width*.88f&&e.y<height*.16f){onRefreshRequested?.invoke();performClick()};return true}
+    override fun performClick():Boolean{super.performClick();return true}
+
+    companion object{
+        val WHITE=Color.rgb(246,246,249);val MUTED=Color.rgb(166,166,178);val DIM=Color.rgb(100,100,112)
+        val CARD=Color.rgb(8,8,11);val BORDER=Color.rgb(31,31,39);val BLUE=Color.rgb(102,169,255)
+        val GREEN=Color.rgb(100,220,145);val ICON=Color.rgb(231,231,237);val ACCENT=Color.rgb(15,26,44)
+    }
 }
