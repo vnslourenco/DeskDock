@@ -11,8 +11,8 @@ android {
         applicationId = "com.deskdock.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 15
-        versionName = "1.1.0"
+        versionCode = 16
+        versionName = "1.1.1"
     }
 
     buildTypes {
@@ -26,7 +26,8 @@ android {
 }
 
 dependencies {
-    val media3Version = "1.10.1"
+    // 1.8.0 is used intentionally for broader RTSP camera compatibility.
+    val media3Version = "1.8.0"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
     implementation("androidx.media3:media3-exoplayer-rtsp:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
