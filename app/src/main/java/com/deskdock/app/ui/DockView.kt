@@ -1,5 +1,8 @@
 package com.deskdock.app.ui
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.*
 import android.view.MotionEvent
@@ -28,6 +31,9 @@ class DockView(context: Context) : View(context) {
     private var sx=0f
     private var sy=0f
     private var showDaily=false
+    private var cameraLive=false
+    private var forecastAlpha=1f
+    private var forecastAnimator:ValueAnimator?=null
 
     fun setNow(v:Long){now=v;invalidate()}
     fun setWeather(v:WeatherSnapshot){weather=v;error=false;invalidate()}
@@ -38,7 +44,31 @@ class DockView(context: Context) : View(context) {
     fun setLocationLabel(v:String){invalidate()}
     fun setCalendarPermission(v:Boolean){calPermission=v;invalidate()}
     fun setCalendarStatus(v:String){calStatus=v;invalidate()}
-    fun setForecastModeDaily(v:Boolean){showDaily=v;invalidate()}
+    fun setCameraLive(v:Boolean){cameraLive=v;invalidate()}
+
+    fun setForecastModeDaily(v:Boolean){
+        if(v==showDaily && forecastAlpha>=.99f) return
+        forecastAnimator?.cancel()
+        var cancelled=false
+        forecastAnimator=ValueAnimator.ofFloat(forecastAlpha,0f).apply{
+            duration=220L
+            addUpdateListener{forecastAlpha=it.animatedValue as Float;invalidate()}
+            addListener(object:AnimatorListenerAdapter(){
+                override fun onAnimationCancel(animation:Animator){cancelled=true}
+                override fun onAnimationEnd(animation:Animator){
+                    if(cancelled)return
+                    showDaily=v
+                    forecastAnimator=ValueAnimator.ofFloat(0f,1f).apply{
+                        duration=320L
+                        addUpdateListener{forecastAlpha=it.animatedValue as Float;invalidate()}
+                        start()
+                    }
+                }
+            })
+            start()
+        }
+    }
+
     fun shiftForBurnInProtection(){sx=Random.nextInt(-7,8).toFloat();sy=Random.nextInt(-5,6).toFloat();invalidate()}
 
     override fun onDraw(c:Canvas){
@@ -64,7 +94,9 @@ class DockView(context: Context) : View(context) {
         surface(c,leftTop,h); surface(c,leftBottom,h); surface(c,rightTop,h); surface(c,rightBottom,h)
         topLeft(c,leftTop,h)
         cameraPanel(c,leftBottom,h)
+        val layer=c.saveLayerAlpha(rightTop,(forecastAlpha*255f).toInt().coerceIn(0,255))
         if(showDaily) dailyWide(c,rightTop,h) else hourly(c,rightTop,h)
+        c.restoreToCount(layer)
         agenda(c,rightBottom,h)
         c.restore()
     }
@@ -76,23 +108,26 @@ class DockView(context: Context) : View(context) {
         text(c,time(),clockX,r.top+r.height()*.47f,h*.120f,WHITE,true)
         val dateX=r.left+r.width()*.04f
         val dateMaxWidth=split-dateX-h*.018f
-        fitText(c,date(),dateX,r.top+r.height()*.78f,h*.034f,h*.025f,dateMaxWidth,MUTED,true)
-        val bx=r.left+r.width()*.04f; val by=r.bottom-h*.025f
-        battery(c,bx,by,h*.020f)
+        fitText(c,date(),dateX,r.top+r.height()*.80f,h*.034f,h*.025f,dateMaxWidth,MUTED,true)
+
+        val batterySize=h*.026f
+        val bx=split-r.width()*.17f
+        val by=r.top+r.height()*.18f
+        battery(c,bx,by,batterySize)
 
         weather?.let{v->
             val cx=split+(r.right-split)*.50f
-            textCenter(c,"ATUAL",cx,r.top+r.height()*.17f,h*.026f,DIM,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.38f,h*.040f)
-            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.69f,h*.076f,WHITE,true)
-            textCenter(c,"Sensação ${v.feelsLikeC}°",cx,r.top+r.height()*.89f,h*.031f,MUTED,true)
+            textCenter(c,"ATUAL",cx,r.top+r.height()*.16f,h*.026f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.34f,h*.034f)
+            textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.72f,h*.076f,WHITE,true)
+            textCenter(c,"Sensação ${v.feelsLikeC}°",cx,r.top+r.height()*.91f,h*.031f,MUTED,true)
         }?:run{textCenter(c,if(error)"--" else "…",split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.060f,MUTED,true)}
     }
 
     private fun cameraPanel(c:Canvas,r:RectF,h:Float){
         val x=r.left+r.width()*.045f
-        header(c,"CÂMERA DA FRENTE",x,r.top+r.height()*.095f,h*.029f)
-        textRight(c,"AO VIVO",r.right-r.width()*.04f,r.top+r.height()*.095f,h*.022f,BLUE,true)
+        header(c,"CÂMERA",x,r.top+r.height()*.095f,h*.029f)
+        if(cameraLive) textRight(c,"AO VIVO",r.right-r.width()*.04f,r.top+r.height()*.095f,h*.022f,BLUE,true)
     }
 
     private fun hourly(c:Canvas,r:RectF,h:Float){
@@ -147,7 +182,7 @@ class DockView(context: Context) : View(context) {
 
     private fun surface(c:Canvas,r:RectF,h:Float){fill.color=CARD;c.drawRoundRect(r,h*.020f,h*.020f,fill);stroke.strokeWidth=(h*.0012f).coerceAtLeast(1f);stroke.color=BORDER;c.drawRoundRect(r,h*.020f,h*.020f,stroke)}
     private fun header(c:Canvas,s:String,x:Float,y:Float,z:Float)=text(c,s,x,y,z,WHITE,true)
-    private fun battery(c:Canvas,x:Float,y:Float,s:Float){val bw=s*1.45f;val bh=s*.65f;stroke.strokeWidth=1.5f;stroke.color=if(battery.charging)GREEN else MUTED;c.drawRoundRect(RectF(x,y-bh,x+bw,y),bh*.2f,bh*.2f,stroke);fill.color=stroke.color;val f=battery.percent.coerceIn(0,100)/100f;c.drawRect(x+3,y-bh+3,x+3+(bw-6)*f,y-3,fill);text(c,"${battery.percent}%",x+bw+s*.45f,y,s,MUTED,true)}
+    private fun battery(c:Canvas,x:Float,y:Float,s:Float){val bw=s*1.45f;val bh=s*.65f;stroke.strokeWidth=1.7f;stroke.color=if(battery.charging)GREEN else MUTED;c.drawRoundRect(RectF(x,y-bh,x+bw,y),bh*.2f,bh*.2f,stroke);fill.color=stroke.color;val f=battery.percent.coerceIn(0,100)/100f;c.drawRect(x+3,y-bh+3,x+3+(bw-6)*f,y-3,fill);text(c,"${battery.percent}%",x+bw+s*.45f,y,s,MUTED,true)}
     private fun line(c:Canvas,x1:Float,y1:Float,x2:Float,y2:Float,h:Float){stroke.strokeWidth=(h*.0011f).coerceAtLeast(1f);stroke.color=BORDER;c.drawLine(x1,y1,x2,y2,stroke)}
     private fun text(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x,y,q)}
     private fun textCenter(c:Canvas,s:String,x:Float,y:Float,z:Float,col:Int,b:Boolean=false){val q=if(b)med else reg;q.textSize=z;q.color=col;c.drawText(s,x-q.measureText(s)/2f,y,q)}
