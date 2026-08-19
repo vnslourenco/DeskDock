@@ -6,8 +6,9 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Typeface
+import android.graphics.Paint
 import android.graphics.drawable.GradientDrawable
 import android.location.Geocoder
 import android.os.BatteryManager
@@ -37,6 +38,7 @@ import com.deskdock.app.model.BatteryInfo
 import com.deskdock.app.model.WeatherSnapshot
 import com.deskdock.app.ui.DockView
 import java.util.Locale
+import kotlin.math.min
 
 @OptIn(UnstableApi::class)
 class MainActivity : Activity() {
@@ -45,7 +47,7 @@ class MainActivity : Activity() {
     private lateinit var cameraFrame: FrameLayout
     private lateinit var playerView: PlayerView
     private lateinit var cameraStatus: TextView
-    private lateinit var cameraClose: TextView
+    private lateinit var cameraClose: View
     private lateinit var calendarRepo: CalendarRepository
     private lateinit var locationRepo: LocationRepository
     private val weatherRepo = WeatherRepository()
@@ -142,11 +144,7 @@ class MainActivity : Activity() {
             textSize = 18f
             gravity = Gravity.CENTER
             setPadding(18, 18, 18, 18)
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(15, 26, 44))
-                cornerRadius = 24f
-                setStroke(2, Color.rgb(45, 70, 105))
-            }
+            background = idleCameraBackground()
             setOnClickListener {
                 if (!cameraActive) openCameraSession()
             }
@@ -156,15 +154,20 @@ class MainActivity : Activity() {
             }
         }
 
-        cameraClose = TextView(this).apply {
-            text = "✕"
-            textSize = 21f
-            gravity = Gravity.CENTER
-            includeFontPadding = false
-            setPadding(0, 0, 0, 2)
-            translationY = -1f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            setTextColor(Color.WHITE)
+        cameraClose = object : View(this) {
+            private val xPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                strokeCap = Paint.Cap.ROUND
+            }
+            override fun onDraw(canvas: Canvas) {
+                super.onDraw(canvas)
+                val d = min(width, height).toFloat()
+                xPaint.strokeWidth = (d * .075f).coerceAtLeast(2.5f)
+                val inset = d * .32f
+                canvas.drawLine(inset, inset, width - inset, height - inset, xPaint)
+                canvas.drawLine(width - inset, inset, inset, height - inset, xPaint)
+            }
+        }.apply {
             background = GradientDrawable().apply {
                 setColor(Color.argb(210, 15, 15, 18))
                 shape = GradientDrawable.OVAL
@@ -183,6 +186,12 @@ class MainActivity : Activity() {
             rightMargin = 10
         })
         root.addView(cameraFrame)
+    }
+
+    private fun idleCameraBackground() = GradientDrawable().apply {
+        setColor(Color.rgb(10, 17, 29))
+        cornerRadius = 24f
+        setStroke(2, Color.rgb(38, 58, 84))
     }
 
     private fun positionCameraOverlay() {
@@ -215,19 +224,17 @@ class MainActivity : Activity() {
     private fun showCameraIdle() {
         cameraActive = false
         cameraUsingTcp = false
+        dockView.setCameraLive(false)
         playerView.visibility = View.INVISIBLE
         cameraClose.visibility = View.GONE
         cameraStatus.visibility = View.VISIBLE
-        cameraStatus.background = GradientDrawable().apply {
-            setColor(Color.rgb(15, 26, 44))
-            cornerRadius = 24f
-            setStroke(2, Color.rgb(45, 70, 105))
-        }
-        val configured = !prefs.getString("camera_rtsp_url", null).isNullOrBlank()
-        cameraStatus.text = if (configured) {
-            "▶  ABRIR CÂMERA\n\nToque para visualizar · fecha em 2 min"
+        cameraStatus.background = idleCameraBackground()
+        cameraStatus.textSize = 54f
+        cameraStatus.text = "📷"
+        cameraStatus.contentDescription = if (!prefs.getString("camera_rtsp_url", null).isNullOrBlank()) {
+            "Abrir câmera"
         } else {
-            "▶  CONFIGURAR CÂMERA\n\nToque para informar o RTSP"
+            "Configurar câmera"
         }
     }
 
@@ -260,6 +267,7 @@ class MainActivity : Activity() {
 
         cameraActive = true
         cameraUsingTcp = false
+        dockView.setCameraLive(false)
         cameraClose.visibility = View.VISIBLE
         handler.removeCallbacks(cameraAutoOff)
         handler.postDelayed(cameraAutoOff, 2 * 60_000L)
@@ -272,6 +280,7 @@ class MainActivity : Activity() {
 
         releasePlayer()
         cameraUsingTcp = forceTcp
+        cameraStatus.textSize = 18f
         cameraStatus.visibility = View.VISIBLE
         cameraStatus.background = null
         cameraStatus.text = if (forceTcp) "Conectando câmera · TCP…" else "Conectando câmera…"
@@ -287,12 +296,15 @@ class MainActivity : Activity() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY && cameraActive) {
                         cameraStatus.visibility = View.GONE
+                        dockView.setCameraLive(true)
                     }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
                     if (!cameraActive) return
+                    dockView.setCameraLive(false)
                     if (!cameraUsingTcp) {
+                        cameraStatus.textSize = 18f
                         cameraStatus.visibility = View.VISIBLE
                         cameraStatus.text = "Tentando modo TCP…"
                         handler.postDelayed({ if (cameraActive) startCameraTransport(true) }, 600L)
@@ -305,12 +317,9 @@ class MainActivity : Activity() {
                         cameraUsingTcp = false
                         playerView.visibility = View.INVISIBLE
                         cameraClose.visibility = View.GONE
+                        cameraStatus.textSize = 18f
                         cameraStatus.visibility = View.VISIBLE
-                        cameraStatus.background = GradientDrawable().apply {
-                            setColor(Color.rgb(15, 26, 44))
-                            cornerRadius = 24f
-                            setStroke(2, Color.rgb(45, 70, 105))
-                        }
+                        cameraStatus.background = idleCameraBackground()
                         cameraStatus.text = "Câmera indisponível\n$detail\n\nTOQUE PARA TENTAR NOVAMENTE"
                     }
                 }
@@ -328,14 +337,12 @@ class MainActivity : Activity() {
             handler.removeCallbacks(cameraAutoOff)
             releasePlayer()
             cameraActive = false
+            dockView.setCameraLive(false)
             playerView.visibility = View.INVISIBLE
             cameraClose.visibility = View.GONE
+            cameraStatus.textSize = 18f
             cameraStatus.visibility = View.VISIBLE
-            cameraStatus.background = GradientDrawable().apply {
-                setColor(Color.rgb(15, 26, 44))
-                cornerRadius = 24f
-                setStroke(2, Color.rgb(45, 70, 105))
-            }
+            cameraStatus.background = idleCameraBackground()
             cameraStatus.text = "URL RTSP inválida\n${it.message.orEmpty().take(52)}\n\nTOQUE PARA TENTAR NOVAMENTE"
         }
     }
@@ -344,6 +351,7 @@ class MainActivity : Activity() {
         handler.removeCallbacks(cameraAutoOff)
         cameraActive = false
         cameraUsingTcp = false
+        dockView.setCameraLive(false)
         releasePlayer()
         if (showIdle) showCameraIdle()
     }
