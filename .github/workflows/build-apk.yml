@@ -17,6 +17,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Publish run id
+        run: |
+          echo "${{ github.run_id }}" > .github/LATEST_RUN_ID
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/LATEST_RUN_ID
+          git commit -m "Update latest build run id" || true
+          git push || true
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -43,13 +52,3 @@ jobs:
           name: DeskDock-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-
-      - name: Publish run id
-        if: success()
-        run: |
-          echo "${{ github.run_id }}" > .github/LATEST_RUN_ID
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/LATEST_RUN_ID
-          git commit -m "Update latest build run id" || exit 0
-          git push
