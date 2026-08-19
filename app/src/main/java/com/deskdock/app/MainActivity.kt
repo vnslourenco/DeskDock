@@ -44,11 +44,14 @@ class MainActivity : Activity() {
     private lateinit var cameraFrame: FrameLayout
     private lateinit var playerView: PlayerView
     private lateinit var cameraStatus: TextView
+    private lateinit var cameraClose: TextView
     private lateinit var calendarRepo: CalendarRepository
     private lateinit var locationRepo: LocationRepository
     private val weatherRepo = WeatherRepository()
     private val handler = Handler(Looper.getMainLooper())
+
     private var player: ExoPlayer? = null
+    private var cameraActive = false
     private var cameraUsingTcp = false
     private val prefs by lazy { getSharedPreferences("deskdock", MODE_PRIVATE) }
 
@@ -69,7 +72,7 @@ class MainActivity : Activity() {
             handler.postDelayed(this, if (dailyForecastVisible) 30_000L else 60_000L)
         }
     }
-    private val cameraRetry = Runnable { startCamera(false) }
+    private val cameraAutoOff = Runnable { stopCamera(true) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -91,21 +94,23 @@ class MainActivity : Activity() {
         handler.post(shift)
         handler.post(refresh)
         handler.postDelayed(forecastSwitch, 60_000L)
-        startCamera(false)
+        showCameraIdle()
     }
 
     override fun onResume() {
         super.onResume()
         enterImmersive()
         refreshCalendar()
-        if (player == null) startCamera(false)
+    }
+
+    override fun onPause() {
+        if (cameraActive) stopCamera(true)
+        super.onPause()
     }
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        playerView.player = null
-        player?.release()
-        player = null
+        releasePlayer()
         super.onDestroy()
     }
 
@@ -120,20 +125,55 @@ class MainActivity : Activity() {
                 true
             }
         }
+
         playerView = PlayerView(this).apply {
             useController = false
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             setShutterBackgroundColor(Color.BLACK)
+            visibility = View.INVISIBLE
         }
+
         cameraStatus = TextView(this).apply {
-            setTextColor(Color.rgb(166,166,178))
-            textSize = 15f
+            setTextColor(Color.rgb(232, 232, 238))
+            textSize = 18f
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.TRANSPARENT)
-            text = "Segure aqui para configurar a câmera"
+            setPadding(18, 18, 18, 18)
+            background = GradientDrawable().apply {
+                setColor(Color.rgb(15, 26, 44))
+                cornerRadius = 24f
+                setStroke(2, Color.rgb(45, 70, 105))
+            }
+            setOnClickListener {
+                if (!cameraActive) startCamera(false)
+            }
+            setOnLongClickListener {
+                showCameraConfigDialog()
+                true
+            }
         }
+
+        cameraClose = TextView(this).apply {
+            text = "×"
+            textSize = 24f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(Color.argb(210, 15, 15, 18))
+                shape = GradientDrawable.OVAL
+                setStroke(1, Color.rgb(75, 75, 82))
+            }
+            visibility = View.GONE
+            setOnClickListener { stopCamera(true) }
+        }
+
         cameraFrame.addView(playerView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        cameraFrame.addView(cameraStatus, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        cameraFrame.addView(cameraStatus, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
+            setMargins(8, 8, 8, 8)
+        })
+        cameraFrame.addView(cameraClose, FrameLayout.LayoutParams(54, 54, Gravity.TOP or Gravity.END).apply {
+            topMargin = 10
+            rightMargin = 10
+        })
         root.addView(cameraFrame)
     }
 
@@ -156,6 +196,20 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun showCameraIdle() {
+        cameraActive = false
+        cameraUsingTcp = false
+        playerView.visibility = View.INVISIBLE
+        cameraClose.visibility = View.GONE
+        cameraStatus.visibility = View.VISIBLE
+        val configured = !prefs.getString("camera_rtsp_url", null).isNullOrBlank()
+        cameraStatus.text = if (configured) {
+            "▶  ABRIR CÂMERA\n\nToque para visualizar · fecha em 2 min"
+        } else {
+            "▶  CONFIGURAR CÂMERA\n\nToque para informar o RTSP"
+        }
+    }
+
     private fun showCameraConfigDialog() {
         val input = EditText(this).apply {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
@@ -168,47 +222,66 @@ class MainActivity : Activity() {
             .setMessage("Cole a URL RTSP completa. Ela fica salva somente neste aparelho.")
             .setView(input)
             .setPositiveButton("Salvar") { _, _ ->
-                val url = input.text.toString().trim()
-                prefs.edit().putString("camera_rtsp_url", url).apply()
-                startCamera(false)
+                stopCamera(false)
+                prefs.edit().putString("camera_rtsp_url", input.text.toString().trim()).apply()
+                showCameraIdle()
             }
             .setNegativeButton("Cancelar", null)
             .show()
     }
 
     private fun startCamera(forceTcp: Boolean) {
-        handler.removeCallbacks(cameraRetry)
-        cameraUsingTcp = forceTcp
         val url = prefs.getString("camera_rtsp_url", null)?.trim().orEmpty()
         if (url.isBlank()) {
-            cameraStatus.visibility = View.VISIBLE
-            cameraStatus.text = "Segure aqui para configurar a câmera"
+            showCameraConfigDialog()
             return
         }
-        cameraStatus.visibility = View.VISIBLE
-        cameraStatus.text = if (forceTcp) "Conectando câmera · TCP…" else "Conectando câmera…"
 
-        val exo = player ?: ExoPlayer.Builder(this).build().also { p ->
+        handler.removeCallbacks(cameraAutoOff)
+        releasePlayer()
+        cameraActive = true
+        cameraUsingTcp = forceTcp
+        cameraStatus.visibility = View.VISIBLE
+        cameraStatus.background = null
+        cameraStatus.text = if (forceTcp) "Conectando câmera · TCP…" else "Conectando câmera…"
+        cameraClose.visibility = View.VISIBLE
+        playerView.visibility = View.VISIBLE
+
+        val exo = ExoPlayer.Builder(this).build().also { p ->
             player = p
             playerView.player = p
             p.volume = 0f
             p.repeatMode = Player.REPEAT_MODE_ONE
             p.addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_READY) cameraStatus.visibility = View.GONE
+                    if (playbackState == Player.STATE_READY && cameraActive) {
+                        cameraStatus.visibility = View.GONE
+                        handler.removeCallbacks(cameraAutoOff)
+                        handler.postDelayed(cameraAutoOff, 2 * 60_000L)
+                    }
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    if (!cameraActive) return
                     if (!cameraUsingTcp) {
                         cameraStatus.visibility = View.VISIBLE
                         cameraStatus.text = "Tentando modo TCP…"
-                        handler.postDelayed({ startCamera(true) }, 700L)
+                        handler.postDelayed({ if (cameraActive) startCamera(true) }, 600L)
                     } else {
-                        val detail = error.cause?.message?.lineSequence()?.firstOrNull()?.take(55)
+                        val detail = error.cause?.message?.lineSequence()?.firstOrNull()?.take(52)
                             ?: error.errorCodeName
+                        releasePlayer()
+                        cameraActive = false
+                        cameraUsingTcp = false
+                        playerView.visibility = View.INVISIBLE
+                        cameraClose.visibility = View.GONE
                         cameraStatus.visibility = View.VISIBLE
-                        cameraStatus.text = "Câmera indisponível\n$detail\nTentando novamente…"
-                        handler.postDelayed(cameraRetry, 10_000L)
+                        cameraStatus.background = GradientDrawable().apply {
+                            setColor(Color.rgb(15, 26, 44))
+                            cornerRadius = 24f
+                            setStroke(2, Color.rgb(45, 70, 105))
+                        }
+                        cameraStatus.text = "Câmera indisponível\n$detail\n\nTOQUE PARA TENTAR NOVAMENTE"
                     }
                 }
             })
@@ -218,16 +291,32 @@ class MainActivity : Activity() {
             val item = MediaItem.fromUri(url)
             val factory = RtspMediaSource.Factory().setTimeoutMs(10_000)
             if (forceTcp) factory.setForceUseRtpTcp(true)
-            val source = factory.createMediaSource(item)
-            exo.stop()
-            exo.clearMediaItems()
-            exo.setMediaSource(source)
+            exo.setMediaSource(factory.createMediaSource(item))
             exo.prepare()
             exo.playWhenReady = true
         }.onFailure {
+            releasePlayer()
+            cameraActive = false
+            playerView.visibility = View.INVISIBLE
+            cameraClose.visibility = View.GONE
             cameraStatus.visibility = View.VISIBLE
-            cameraStatus.text = "URL RTSP inválida\n${it.message.orEmpty().take(55)}\nSegure para configurar"
+            cameraStatus.text = "URL RTSP inválida\n${it.message.orEmpty().take(52)}\n\nTOQUE PARA TENTAR NOVAMENTE"
         }
+    }
+
+    private fun stopCamera(showIdle: Boolean) {
+        handler.removeCallbacks(cameraAutoOff)
+        cameraActive = false
+        cameraUsingTcp = false
+        releasePlayer()
+        if (showIdle) showCameraIdle()
+    }
+
+    private fun releasePlayer() {
+        playerView.player = null
+        player?.stop()
+        player?.release()
+        player = null
     }
 
     private fun requestNeededPermissions() {
