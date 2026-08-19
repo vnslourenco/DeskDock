@@ -72,7 +72,9 @@ class MainActivity : Activity() {
             handler.postDelayed(this, if (dailyForecastVisible) 30_000L else 60_000L)
         }
     }
-    private val cameraAutoOff = Runnable { stopCamera(true) }
+    private val cameraAutoOff = Runnable {
+        if (cameraActive) stopCamera(true)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -145,7 +147,7 @@ class MainActivity : Activity() {
                 setStroke(2, Color.rgb(45, 70, 105))
             }
             setOnClickListener {
-                if (!cameraActive) startCamera(false)
+                if (!cameraActive) openCameraSession()
             }
             setOnLongClickListener {
                 showCameraConfigDialog()
@@ -155,13 +157,13 @@ class MainActivity : Activity() {
 
         cameraClose = TextView(this).apply {
             text = "×"
-            textSize = 24f
+            textSize = 22f
             gravity = Gravity.CENTER
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
-                setColor(Color.argb(210, 15, 15, 18))
+                setColor(Color.argb(220, 22, 22, 27))
                 shape = GradientDrawable.OVAL
-                setStroke(1, Color.rgb(75, 75, 82))
+                setStroke(1, Color.rgb(82, 82, 92))
             }
             visibility = View.GONE
             setOnClickListener { stopCamera(true) }
@@ -171,11 +173,8 @@ class MainActivity : Activity() {
         cameraFrame.addView(cameraStatus, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
             setMargins(8, 8, 8, 8)
         })
-        cameraFrame.addView(cameraClose, FrameLayout.LayoutParams(54, 54, Gravity.TOP or Gravity.END).apply {
-            topMargin = 10
-            rightMargin = 10
-        })
         root.addView(cameraFrame)
+        root.addView(cameraClose)
     }
 
     private fun positionCameraOverlay() {
@@ -186,11 +185,12 @@ class MainActivity : Activity() {
         val cardLeft = w * .012f
         val cardTop = h * .325f
         val cardWidth = w * .390f
+        val cardRight = cardLeft + cardWidth
         val cardBottom = h * .965f
         val cardHeight = cardBottom - cardTop
 
         val left = cardLeft + cardWidth * .035f
-        val right = cardLeft + cardWidth - cardWidth * .035f
+        val right = cardRight - cardWidth * .035f
         val videoWidth = right - left
         val videoHeight = videoWidth * 9f / 16f
         val availableTop = cardTop + cardHeight * .18f
@@ -203,6 +203,12 @@ class MainActivity : Activity() {
             leftMargin = left.toInt()
             topMargin = top.toInt()
         }
+
+        val closeSize = (h * .050f).toInt().coerceAtLeast(42)
+        cameraClose.layoutParams = FrameLayout.LayoutParams(closeSize, closeSize).apply {
+            leftMargin = (cardRight - closeSize - cardWidth * .025f).toInt()
+            topMargin = (cardTop + cardHeight * .035f).toInt()
+        }
     }
 
     private fun showCameraIdle() {
@@ -211,6 +217,11 @@ class MainActivity : Activity() {
         playerView.visibility = View.INVISIBLE
         cameraClose.visibility = View.GONE
         cameraStatus.visibility = View.VISIBLE
+        cameraStatus.background = GradientDrawable().apply {
+            setColor(Color.rgb(15, 26, 44))
+            cornerRadius = 24f
+            setStroke(2, Color.rgb(45, 70, 105))
+        }
         val configured = !prefs.getString("camera_rtsp_url", null).isNullOrBlank()
         cameraStatus.text = if (configured) {
             "▶  ABRIR CÂMERA\n\nToque para visualizar · fecha em 2 min"
@@ -239,16 +250,26 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun startCamera(forceTcp: Boolean) {
+    private fun openCameraSession() {
         val url = prefs.getString("camera_rtsp_url", null)?.trim().orEmpty()
         if (url.isBlank()) {
             showCameraConfigDialog()
             return
         }
 
-        handler.removeCallbacks(cameraAutoOff)
-        releasePlayer()
         cameraActive = true
+        cameraUsingTcp = false
+        cameraClose.visibility = View.VISIBLE
+        handler.removeCallbacks(cameraAutoOff)
+        handler.postDelayed(cameraAutoOff, 2 * 60_000L)
+        startCameraTransport(false)
+    }
+
+    private fun startCameraTransport(forceTcp: Boolean) {
+        val url = prefs.getString("camera_rtsp_url", null)?.trim().orEmpty()
+        if (url.isBlank() || !cameraActive) return
+
+        releasePlayer()
         cameraUsingTcp = forceTcp
         cameraStatus.visibility = View.VISIBLE
         cameraStatus.background = null
@@ -265,8 +286,6 @@ class MainActivity : Activity() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY && cameraActive) {
                         cameraStatus.visibility = View.GONE
-                        handler.removeCallbacks(cameraAutoOff)
-                        handler.postDelayed(cameraAutoOff, 2 * 60_000L)
                     }
                 }
 
@@ -275,10 +294,11 @@ class MainActivity : Activity() {
                     if (!cameraUsingTcp) {
                         cameraStatus.visibility = View.VISIBLE
                         cameraStatus.text = "Tentando modo TCP…"
-                        handler.postDelayed({ if (cameraActive) startCamera(true) }, 600L)
+                        handler.postDelayed({ if (cameraActive) startCameraTransport(true) }, 600L)
                     } else {
                         val detail = error.cause?.message?.lineSequence()?.firstOrNull()?.take(52)
                             ?: error.errorCodeName
+                        handler.removeCallbacks(cameraAutoOff)
                         releasePlayer()
                         cameraActive = false
                         cameraUsingTcp = false
@@ -304,6 +324,7 @@ class MainActivity : Activity() {
             exo.prepare()
             exo.playWhenReady = true
         }.onFailure {
+            handler.removeCallbacks(cameraAutoOff)
             releasePlayer()
             cameraActive = false
             playerView.visibility = View.INVISIBLE
