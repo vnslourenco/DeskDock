@@ -49,6 +49,7 @@ class MainActivity : Activity() {
     private val weatherRepo = WeatherRepository()
     private val handler = Handler(Looper.getMainLooper())
     private var player: ExoPlayer? = null
+    private var cameraUsingTcp = false
     private val prefs by lazy { getSharedPreferences("deskdock", MODE_PRIVATE) }
 
     private val tick = object : Runnable {
@@ -68,7 +69,7 @@ class MainActivity : Activity() {
             handler.postDelayed(this, if (dailyForecastVisible) 30_000L else 60_000L)
         }
     }
-    private val cameraRetry = Runnable { startCamera() }
+    private val cameraRetry = Runnable { startCamera(false) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -90,14 +91,14 @@ class MainActivity : Activity() {
         handler.post(shift)
         handler.post(refresh)
         handler.postDelayed(forecastSwitch, 60_000L)
-        startCamera()
+        startCamera(false)
     }
 
     override fun onResume() {
         super.onResume()
         enterImmersive()
         refreshCalendar()
-        if (player == null) startCamera()
+        if (player == null) startCamera(false)
     }
 
     override fun onDestroy() {
@@ -169,14 +170,15 @@ class MainActivity : Activity() {
             .setPositiveButton("Salvar") { _, _ ->
                 val url = input.text.toString().trim()
                 prefs.edit().putString("camera_rtsp_url", url).apply()
-                startCamera()
+                startCamera(false)
             }
             .setNegativeButton("Cancelar", null)
             .show()
     }
 
-    private fun startCamera() {
+    private fun startCamera(forceTcp: Boolean) {
         handler.removeCallbacks(cameraRetry)
+        cameraUsingTcp = forceTcp
         val url = prefs.getString("camera_rtsp_url", null)?.trim().orEmpty()
         if (url.isBlank()) {
             cameraStatus.visibility = View.VISIBLE
@@ -184,7 +186,7 @@ class MainActivity : Activity() {
             return
         }
         cameraStatus.visibility = View.VISIBLE
-        cameraStatus.text = "Conectando câmera…"
+        cameraStatus.text = if (forceTcp) "Conectando câmera · TCP…" else "Conectando câmera…"
 
         val exo = player ?: ExoPlayer.Builder(this).build().also { p ->
             player = p
@@ -195,20 +197,28 @@ class MainActivity : Activity() {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if (playbackState == Player.STATE_READY) cameraStatus.visibility = View.GONE
                 }
+
                 override fun onPlayerError(error: PlaybackException) {
-                    cameraStatus.visibility = View.VISIBLE
-                    cameraStatus.text = "Câmera indisponível\nSegure para configurar"
-                    handler.postDelayed(cameraRetry, 10_000L)
+                    if (!cameraUsingTcp) {
+                        cameraStatus.visibility = View.VISIBLE
+                        cameraStatus.text = "Tentando modo TCP…"
+                        handler.postDelayed({ startCamera(true) }, 700L)
+                    } else {
+                        val detail = error.cause?.message?.lineSequence()?.firstOrNull()?.take(55)
+                            ?: error.errorCodeName
+                        cameraStatus.visibility = View.VISIBLE
+                        cameraStatus.text = "Câmera indisponível\n$detail\nTentando novamente…"
+                        handler.postDelayed(cameraRetry, 10_000L)
+                    }
                 }
             })
         }
 
         runCatching {
             val item = MediaItem.fromUri(url)
-            val source = RtspMediaSource.Factory()
-                .setForceUseRtpTcp(true)
-                .setTimeoutMs(10_000)
-                .createMediaSource(item)
+            val factory = RtspMediaSource.Factory().setTimeoutMs(10_000)
+            if (forceTcp) factory.setForceUseRtpTcp(true)
+            val source = factory.createMediaSource(item)
             exo.stop()
             exo.clearMediaItems()
             exo.setMediaSource(source)
@@ -216,7 +226,7 @@ class MainActivity : Activity() {
             exo.playWhenReady = true
         }.onFailure {
             cameraStatus.visibility = View.VISIBLE
-            cameraStatus.text = "URL RTSP inválida\nSegure para configurar"
+            cameraStatus.text = "URL RTSP inválida\n${it.message.orEmpty().take(55)}\nSegure para configurar"
         }
     }
 
