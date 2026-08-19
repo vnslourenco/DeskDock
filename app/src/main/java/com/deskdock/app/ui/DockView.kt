@@ -49,7 +49,7 @@ class DockView(context: Context) : View(context) {
 
         val pad=w*.012f
         val gap=w*.010f
-        val leftW=w*.315f
+        val leftW=w*.390f
         val lx=pad
         val rx=lx+leftW+gap
         val right=w-pad
@@ -141,7 +141,7 @@ class DockView(context: Context) : View(context) {
             if(i>0) line(c,x,rowTop,r.right-r.width()*.035f,rowTop,h)
             if(i==0){fill.color=ACCENT;c.drawRoundRect(RectF(x-r.width()*.008f,rowTop+h*.010f,r.right-r.width()*.03f,rowTop+rowH-h*.008f),h*.014f,h*.014f,fill)}
             text(c,eventTime(e),x,rowTop+rowH*.63f,h*.048f,if(i==0)BLUE else WHITE,true)
-            text(c,ell(e.title,34),x+r.width()*.23f,rowTop+rowH*.63f,h*.046f,if(i==0)WHITE else MUTED,true)
+            text(c,ell(e.title,28),x+r.width()*.25f,rowTop+rowH*.63f,h*.043f,if(i==0)WHITE else MUTED,true)
         }
     }
 
