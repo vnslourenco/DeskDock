@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.location.Geocoder
 import android.os.BatteryManager
@@ -156,14 +157,18 @@ class MainActivity : Activity() {
         }
 
         cameraClose = TextView(this).apply {
-            text = "×"
-            textSize = 22f
+            text = "✕"
+            textSize = 21f
             gravity = Gravity.CENTER
+            includeFontPadding = false
+            setPadding(0, 0, 0, 2)
+            translationY = -1f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
             setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
-                setColor(Color.argb(220, 22, 22, 27))
+                setColor(Color.argb(210, 15, 15, 18))
                 shape = GradientDrawable.OVAL
-                setStroke(1, Color.rgb(82, 82, 92))
+                setStroke(1, Color.rgb(75, 75, 82))
             }
             visibility = View.GONE
             setOnClickListener { stopCamera(true) }
@@ -173,8 +178,11 @@ class MainActivity : Activity() {
         cameraFrame.addView(cameraStatus, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
             setMargins(8, 8, 8, 8)
         })
+        cameraFrame.addView(cameraClose, FrameLayout.LayoutParams(54, 54, Gravity.TOP or Gravity.END).apply {
+            topMargin = 10
+            rightMargin = 10
+        })
         root.addView(cameraFrame)
-        root.addView(cameraClose)
     }
 
     private fun positionCameraOverlay() {
@@ -185,12 +193,11 @@ class MainActivity : Activity() {
         val cardLeft = w * .012f
         val cardTop = h * .325f
         val cardWidth = w * .390f
-        val cardRight = cardLeft + cardWidth
         val cardBottom = h * .965f
         val cardHeight = cardBottom - cardTop
 
         val left = cardLeft + cardWidth * .035f
-        val right = cardRight - cardWidth * .035f
+        val right = cardLeft + cardWidth - cardWidth * .035f
         val videoWidth = right - left
         val videoHeight = videoWidth * 9f / 16f
         val availableTop = cardTop + cardHeight * .18f
@@ -202,12 +209,6 @@ class MainActivity : Activity() {
         cameraFrame.layoutParams = FrameLayout.LayoutParams(videoWidth.toInt(), finalHeight.toInt()).apply {
             leftMargin = left.toInt()
             topMargin = top.toInt()
-        }
-
-        val closeSize = (h * .050f).toInt().coerceAtLeast(42)
-        cameraClose.layoutParams = FrameLayout.LayoutParams(closeSize, closeSize).apply {
-            leftMargin = (cardRight - closeSize - cardWidth * .025f).toInt()
-            topMargin = (cardTop + cardHeight * .035f).toInt()
         }
     }
 
@@ -330,6 +331,11 @@ class MainActivity : Activity() {
             playerView.visibility = View.INVISIBLE
             cameraClose.visibility = View.GONE
             cameraStatus.visibility = View.VISIBLE
+            cameraStatus.background = GradientDrawable().apply {
+                setColor(Color.rgb(15, 26, 44))
+                cornerRadius = 24f
+                setStroke(2, Color.rgb(45, 70, 105))
+            }
             cameraStatus.text = "URL RTSP inválida\n${it.message.orEmpty().take(52)}\n\nTOQUE PARA TENTAR NOVAMENTE"
         }
     }
