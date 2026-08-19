@@ -2,16 +2,33 @@ package com.deskdock.app
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.location.Geocoder
 import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
+import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.TextView
+import androidx.annotation.OptIn
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.rtsp.RtspMediaSource
+import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerView
 import com.deskdock.app.data.CalendarRepository
 import com.deskdock.app.data.LocationRepository
 import com.deskdock.app.data.WeatherRepository
@@ -20,12 +37,19 @@ import com.deskdock.app.model.WeatherSnapshot
 import com.deskdock.app.ui.DockView
 import java.util.Locale
 
+@OptIn(UnstableApi::class)
 class MainActivity : Activity() {
     private lateinit var dockView: DockView
+    private lateinit var root: FrameLayout
+    private lateinit var cameraFrame: FrameLayout
+    private lateinit var playerView: PlayerView
+    private lateinit var cameraStatus: TextView
     private lateinit var calendarRepo: CalendarRepository
     private lateinit var locationRepo: LocationRepository
     private val weatherRepo = WeatherRepository()
     private val handler = Handler(Looper.getMainLooper())
+    private var player: ExoPlayer? = null
+    private val prefs by lazy { getSharedPreferences("deskdock", MODE_PRIVATE) }
 
     private val tick = object : Runnable {
         override fun run() { dockView.setNow(System.currentTimeMillis()); handler.postDelayed(this, 1000) }
@@ -36,6 +60,15 @@ class MainActivity : Activity() {
     private val refresh = object : Runnable {
         override fun run() { refreshAll(); handler.postDelayed(this, 30 * 60_000L) }
     }
+    private var dailyForecastVisible = false
+    private val forecastSwitch = object : Runnable {
+        override fun run() {
+            dailyForecastVisible = !dailyForecastVisible
+            dockView.setForecastModeDaily(dailyForecastVisible)
+            handler.postDelayed(this, if (dailyForecastVisible) 30_000L else 60_000L)
+        }
+    }
+    private val cameraRetry = Runnable { startCamera() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,17 +76,149 @@ class MainActivity : Activity() {
         enterImmersive()
         calendarRepo = CalendarRepository(this)
         locationRepo = LocationRepository(this)
+
+        root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         dockView = DockView(this).apply { onRefreshRequested = { refreshAll() } }
-        setContentView(dockView)
+        root.addView(dockView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        createCameraOverlay()
+        setContentView(root)
+        root.post { positionCameraOverlay() }
+
         requestNeededPermissions()
         refreshAll()
         handler.post(tick)
         handler.post(shift)
         handler.post(refresh)
+        handler.postDelayed(forecastSwitch, 60_000L)
+        startCamera()
     }
 
-    override fun onResume() { super.onResume(); enterImmersive(); refreshCalendar() }
-    override fun onDestroy() { handler.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onResume() {
+        super.onResume()
+        enterImmersive()
+        refreshCalendar()
+        if (player == null) startCamera()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        playerView.player = null
+        player?.release()
+        player = null
+        super.onDestroy()
+    }
+
+    private fun createCameraOverlay() {
+        cameraFrame = FrameLayout(this).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.BLACK)
+                cornerRadius = 18f
+            }
+            setOnLongClickListener {
+                showCameraConfigDialog()
+                true
+            }
+        }
+        playerView = PlayerView(this).apply {
+            useController = false
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            setShutterBackgroundColor(Color.BLACK)
+        }
+        cameraStatus = TextView(this).apply {
+            setTextColor(Color.rgb(166,166,178))
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.TRANSPARENT)
+            text = "Segure aqui para configurar a câmera"
+        }
+        cameraFrame.addView(playerView, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        cameraFrame.addView(cameraStatus, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        root.addView(cameraFrame)
+    }
+
+    private fun positionCameraOverlay() {
+        val w = root.width.toFloat()
+        val h = root.height.toFloat()
+        if (w <= 0 || h <= 0) return
+        val cardLeft = w * .012f
+        val cardTop = h * .325f
+        val cardWidth = w * .315f
+        val cardBottom = h * .965f
+        val cardHeight = cardBottom - cardTop
+        val left = cardLeft + cardWidth * .035f
+        val top = cardTop + cardHeight * .15f
+        val right = cardLeft + cardWidth - cardWidth * .035f
+        val bottom = cardBottom - cardHeight * .045f
+        cameraFrame.layoutParams = FrameLayout.LayoutParams((right-left).toInt(), (bottom-top).toInt()).apply {
+            leftMargin = left.toInt()
+            topMargin = top.toInt()
+        }
+    }
+
+    private fun showCameraConfigDialog() {
+        val input = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine(true)
+            setText(prefs.getString("camera_rtsp_url", "rtsp://admin:@192.168.0.138:554/cam/realmonitor?channel=1&subtype=1"))
+            setSelection(text.length)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Câmera RTSP")
+            .setMessage("Cole a URL RTSP completa. Ela fica salva somente neste aparelho.")
+            .setView(input)
+            .setPositiveButton("Salvar") { _, _ ->
+                val url = input.text.toString().trim()
+                prefs.edit().putString("camera_rtsp_url", url).apply()
+                startCamera()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun startCamera() {
+        handler.removeCallbacks(cameraRetry)
+        val url = prefs.getString("camera_rtsp_url", null)?.trim().orEmpty()
+        if (url.isBlank()) {
+            cameraStatus.visibility = View.VISIBLE
+            cameraStatus.text = "Segure aqui para configurar a câmera"
+            return
+        }
+        cameraStatus.visibility = View.VISIBLE
+        cameraStatus.text = "Conectando câmera…"
+
+        val exo = player ?: ExoPlayer.Builder(this).build().also { p ->
+            player = p
+            playerView.player = p
+            p.volume = 0f
+            p.repeatMode = Player.REPEAT_MODE_ONE
+            p.addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY) cameraStatus.visibility = View.GONE
+                }
+                override fun onPlayerError(error: PlaybackException) {
+                    cameraStatus.visibility = View.VISIBLE
+                    cameraStatus.text = "Câmera indisponível\nSegure para configurar"
+                    handler.postDelayed(cameraRetry, 10_000L)
+                }
+            })
+        }
+
+        runCatching {
+            val item = MediaItem.fromUri(url)
+            val source = RtspMediaSource.Factory()
+                .setForceUseRtpTcp(true)
+                .setTimeoutMs(10_000)
+                .createMediaSource(item)
+            exo.stop()
+            exo.clearMediaItems()
+            exo.setMediaSource(source)
+            exo.prepare()
+            exo.playWhenReady = true
+        }.onFailure {
+            cameraStatus.visibility = View.VISIBLE
+            cameraStatus.text = "URL RTSP inválida\nSegure para configurar"
+        }
+    }
 
     private fun requestNeededPermissions() {
         val p = mutableListOf<String>()
@@ -89,7 +254,6 @@ class MainActivity : Activity() {
             dockView.setCalendarStatus("Permita acesso ao calendário")
             return dockView.setEvents(emptyList())
         }
-
         dockView.setCalendarStatus("Atualizando agenda…")
         Thread {
             val state = runCatching { calendarRepo.loadState(5) }.getOrNull()
@@ -121,7 +285,6 @@ class MainActivity : Activity() {
                 weatherRepo.fetch(-23.5505, -46.6333) { applyWeatherResult(it) }
                 return@getCurrent
             }
-
             val precision = if (c.accuracyMeters > 0) " · ±${c.accuracyMeters.toInt()} m" else ""
             dockView.setLocationLabel("Local atual$precision")
             resolveLocationLabel(c.latitude, c.longitude, precision)
