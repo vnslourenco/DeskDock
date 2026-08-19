@@ -22,24 +22,23 @@ class DockView(context: Context) : View(context) {
     private var weather:WeatherSnapshot?=null
     private var battery=BatteryInfo(0,false)
     private var events:List<CalendarEvent> = emptyList()
-    private var location="Local atual"
     private var calStatus="Atualizando agenda…"
     private var calPermission=true
-    private var loading=false
     private var error=false
     private var sx=0f
     private var sy=0f
+    private var showDaily=false
 
     fun setNow(v:Long){now=v;invalidate()}
     fun setWeather(v:WeatherSnapshot){weather=v;error=false;invalidate()}
-    fun setWeatherLoading(v:Boolean){loading=v;invalidate()}
+    fun setWeatherLoading(v:Boolean){invalidate()}
     fun setWeatherError(){error=true;invalidate()}
     fun setBattery(v:BatteryInfo){battery=v;invalidate()}
     fun setEvents(v:List<CalendarEvent>){events=v;invalidate()}
-    fun setLocationLabel(v:String){location=v;invalidate()}
+    fun setLocationLabel(v:String){invalidate()}
     fun setCalendarPermission(v:Boolean){calPermission=v;invalidate()}
     fun setCalendarStatus(v:String){calStatus=v;invalidate()}
-
+    fun setForecastModeDaily(v:Boolean){showDaily=v;invalidate()}
     fun shiftForBurnInProtection(){sx=Random.nextInt(-7,8).toFloat();sy=Random.nextInt(-5,6).toFloat();invalidate()}
 
     override fun onDraw(c:Canvas){
@@ -64,8 +63,8 @@ class DockView(context: Context) : View(context) {
 
         surface(c,leftTop,h); surface(c,leftBottom,h); surface(c,rightTop,h); surface(c,rightBottom,h)
         topLeft(c,leftTop,h)
-        daily(c,leftBottom,h)
-        hourly(c,rightTop,h)
+        cameraPanel(c,leftBottom,h)
+        if(showDaily) dailyWide(c,rightTop,h) else hourly(c,rightTop,h)
         agenda(c,rightBottom,h)
         c.restore()
     }
@@ -73,14 +72,11 @@ class DockView(context: Context) : View(context) {
     private fun topLeft(c:Canvas,r:RectF,h:Float){
         val split=r.left+r.width()*.64f
         line(c,split,r.top+h*.018f,split,r.bottom-h*.018f,h)
-
         val clockX=r.left+r.width()*.035f
         text(c,time(),clockX,r.top+r.height()*.47f,h*.120f,WHITE,true)
-
         val dateX=r.left+r.width()*.04f
         val dateMaxWidth=split-dateX-h*.018f
         fitText(c,date(),dateX,r.top+r.height()*.78f,h*.034f,h*.025f,dateMaxWidth,MUTED,true)
-
         val bx=r.left+r.width()*.04f; val by=r.bottom-h*.025f
         battery(c,bx,by,h*.020f)
 
@@ -90,16 +86,19 @@ class DockView(context: Context) : View(context) {
             icon(c,v.weatherCode,cx,r.top+r.height()*.38f,h*.040f)
             textCenter(c,"${v.temperatureC}°",cx,r.top+r.height()*.69f,h*.076f,WHITE,true)
             textCenter(c,"Sensação ${v.feelsLikeC}°",cx,r.top+r.height()*.89f,h*.031f,MUTED,true)
-        }?:run{
-            val msg=if(error)"--" else "…"
-            textCenter(c,msg,split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.060f,MUTED,true)
-        }
+        }?:run{textCenter(c,if(error)"--" else "…",split+(r.right-split)*.5f,r.top+r.height()*.62f,h*.060f,MUTED,true)}
+    }
+
+    private fun cameraPanel(c:Canvas,r:RectF,h:Float){
+        val x=r.left+r.width()*.045f
+        header(c,"CÂMERA DA FRENTE",x,r.top+r.height()*.095f,h*.029f)
+        textRight(c,"AO VIVO",r.right-r.width()*.04f,r.top+r.height()*.095f,h*.022f,BLUE,true)
     }
 
     private fun hourly(c:Canvas,r:RectF,h:Float){
         val x=r.left+r.width()*.035f
         header(c,"PRÓXIMAS HORAS",x,r.top+r.height()*.12f,h*.030f)
-        textRight(c,"↻",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.034f,DIM,true)
+        textRight(c,"60 s",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.021f,DIM,true)
         val a=weather?.hourly?.take(5).orEmpty(); if(a.isEmpty()) return
         val usable=r.width()*.92f; val cw=usable/5f; val start=x
         a.forEachIndexed{i,v->
@@ -111,17 +110,19 @@ class DockView(context: Context) : View(context) {
         }
     }
 
-    private fun daily(c:Canvas,r:RectF,h:Float){
-        val x=r.left+r.width()*.055f
-        header(c,"PRÓXIMOS 3 DIAS",x,r.top+r.height()*.095f,h*.029f)
-        weather?.nextDays?.take(3)?.forEachIndexed{i,v->
-            val colW=r.width()*.89f/3f; val cx=x+colW*i+colW/2f
-            if(i>0) line(c,x+colW*i,r.top+r.height()*.17f,x+colW*i,r.bottom-r.height()*.08f,h)
-            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.25f,h*.047f,WHITE,true)
-            icon(c,v.weatherCode,cx,r.top+r.height()*.43f,h*.041f)
-            textCenter(c,"${v.maxC}°",cx,r.top+r.height()*.64f,h*.055f,WHITE,true)
-            textCenter(c,"${v.minC}°",cx,r.top+r.height()*.77f,h*.045f,MUTED,true)
-            textCenter(c,"${v.rainChance}%",cx,r.top+r.height()*.91f,h*.044f,BLUE,true)
+    private fun dailyWide(c:Canvas,r:RectF,h:Float){
+        val x=r.left+r.width()*.035f
+        header(c,"PRÓXIMOS 3 DIAS",x,r.top+r.height()*.12f,h*.030f)
+        textRight(c,"30 s",r.right-r.width()*.025f,r.top+r.height()*.12f,h*.021f,DIM,true)
+        val a=weather?.nextDays?.take(3).orEmpty(); if(a.isEmpty()) return
+        val usable=r.width()*.90f; val cw=usable/3f; val start=x
+        a.forEachIndexed{i,v->
+            val cx=start+cw*i+cw/2f
+            if(i>0) line(c,start+cw*i,r.top+r.height()*.20f,start+cw*i,r.bottom-r.height()*.08f,h)
+            textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.30f,h*.047f,WHITE,true)
+            icon(c,v.weatherCode,cx,r.top+r.height()*.49f,h*.041f)
+            textCenter(c,"${v.maxC}° / ${v.minC}°",cx,r.top+r.height()*.72f,h*.047f,WHITE,true)
+            textCenter(c,"${v.rainChance}% chuva",cx,r.top+r.height()*.90f,h*.037f,BLUE,true)
         }
     }
 
