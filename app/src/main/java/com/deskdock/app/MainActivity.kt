@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.drawable.GradientDrawable
 import android.location.Geocoder
 import android.os.BatteryManager
@@ -47,6 +48,7 @@ class MainActivity : Activity() {
     private lateinit var cameraFrame: FrameLayout
     private lateinit var playerView: PlayerView
     private lateinit var cameraStatus: TextView
+    private lateinit var cameraIdleIcon: View
     private lateinit var cameraClose: View
     private lateinit var calendarRepo: CalendarRepository
     private lateinit var locationRepo: LocationRepository
@@ -154,6 +156,41 @@ class MainActivity : Activity() {
             }
         }
 
+        cameraIdleIcon = object : View(this) {
+            private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.rgb(228, 231, 238)
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            override fun onDraw(canvas: Canvas) {
+                super.onDraw(canvas)
+                val d = min(width, height).toFloat()
+                val cx = width / 2f
+                val cy = height / 2f
+                p.strokeWidth = (d * .050f).coerceAtLeast(2.5f)
+
+                val bodyW = d * .50f
+                val bodyH = d * .34f
+                val body = RectF(cx - bodyW / 2f, cy - bodyH / 2f + d * .035f, cx + bodyW / 2f, cy + bodyH / 2f + d * .035f)
+                canvas.drawRoundRect(body, d * .065f, d * .065f, p)
+
+                val bumpW = d * .18f
+                val bumpH = d * .085f
+                val bump = RectF(cx - bumpW / 2f, body.top - bumpH * .70f, cx + bumpW / 2f, body.top + bumpH * .45f)
+                canvas.drawRoundRect(bump, d * .035f, d * .035f, p)
+
+                canvas.drawCircle(cx, body.centerY(), d * .095f, p)
+            }
+        }.apply {
+            contentDescription = "Abrir câmera"
+            setOnClickListener { if (!cameraActive) openCameraSession() }
+            setOnLongClickListener {
+                showCameraConfigDialog()
+                true
+            }
+        }
+
         cameraClose = object : View(this) {
             private val xPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE
@@ -181,6 +218,7 @@ class MainActivity : Activity() {
         cameraFrame.addView(cameraStatus, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT).apply {
             setMargins(8, 8, 8, 8)
         })
+        cameraFrame.addView(cameraIdleIcon, FrameLayout.LayoutParams(132, 132, Gravity.CENTER))
         cameraFrame.addView(cameraClose, FrameLayout.LayoutParams(54, 54, Gravity.TOP or Gravity.END).apply {
             topMargin = 10
             rightMargin = 10
@@ -229,9 +267,9 @@ class MainActivity : Activity() {
         cameraClose.visibility = View.GONE
         cameraStatus.visibility = View.VISIBLE
         cameraStatus.background = idleCameraBackground()
-        cameraStatus.textSize = 54f
-        cameraStatus.text = "📷"
-        cameraStatus.contentDescription = if (!prefs.getString("camera_rtsp_url", null).isNullOrBlank()) {
+        cameraStatus.text = ""
+        cameraIdleIcon.visibility = View.VISIBLE
+        cameraIdleIcon.contentDescription = if (!prefs.getString("camera_rtsp_url", null).isNullOrBlank()) {
             "Abrir câmera"
         } else {
             "Configurar câmera"
@@ -268,6 +306,7 @@ class MainActivity : Activity() {
         cameraActive = true
         cameraUsingTcp = false
         dockView.setCameraLive(false)
+        cameraIdleIcon.visibility = View.GONE
         cameraClose.visibility = View.VISIBLE
         handler.removeCallbacks(cameraAutoOff)
         handler.postDelayed(cameraAutoOff, 2 * 60_000L)
@@ -280,6 +319,7 @@ class MainActivity : Activity() {
 
         releasePlayer()
         cameraUsingTcp = forceTcp
+        cameraIdleIcon.visibility = View.GONE
         cameraStatus.textSize = 18f
         cameraStatus.visibility = View.VISIBLE
         cameraStatus.background = null
@@ -317,6 +357,7 @@ class MainActivity : Activity() {
                         cameraUsingTcp = false
                         playerView.visibility = View.INVISIBLE
                         cameraClose.visibility = View.GONE
+                        cameraIdleIcon.visibility = View.GONE
                         cameraStatus.textSize = 18f
                         cameraStatus.visibility = View.VISIBLE
                         cameraStatus.background = idleCameraBackground()
@@ -340,6 +381,7 @@ class MainActivity : Activity() {
             dockView.setCameraLive(false)
             playerView.visibility = View.INVISIBLE
             cameraClose.visibility = View.GONE
+            cameraIdleIcon.visibility = View.GONE
             cameraStatus.textSize = 18f
             cameraStatus.visibility = View.VISIBLE
             cameraStatus.background = idleCameraBackground()
