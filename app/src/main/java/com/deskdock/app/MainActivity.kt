@@ -309,7 +309,7 @@ class MainActivity : Activity() {
         cameraIdleIcon.visibility = View.GONE
         cameraClose.visibility = View.VISIBLE
         handler.removeCallbacks(cameraAutoOff)
-        handler.postDelayed(cameraAutoOff, 2 * 60_000L)
+        handler.postDelayed(cameraAutoOff, 30_000L)
         startCameraTransport(false)
     }
 
