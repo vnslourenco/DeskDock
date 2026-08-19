@@ -120,6 +120,7 @@ class MainActivity : Activity() {
                 setColor(Color.BLACK)
                 cornerRadius = 18f
             }
+            clipToOutline = true
             setOnLongClickListener {
                 showCameraConfigDialog()
                 true
@@ -128,7 +129,7 @@ class MainActivity : Activity() {
 
         playerView = PlayerView(this).apply {
             useController = false
-            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             setShutterBackgroundColor(Color.BLACK)
             visibility = View.INVISIBLE
         }
@@ -181,16 +182,24 @@ class MainActivity : Activity() {
         val w = root.width.toFloat()
         val h = root.height.toFloat()
         if (w <= 0 || h <= 0) return
+
         val cardLeft = w * .012f
         val cardTop = h * .325f
-        val cardWidth = w * .315f
+        val cardWidth = w * .390f
         val cardBottom = h * .965f
         val cardHeight = cardBottom - cardTop
+
         val left = cardLeft + cardWidth * .035f
-        val top = cardTop + cardHeight * .15f
         val right = cardLeft + cardWidth - cardWidth * .035f
-        val bottom = cardBottom - cardHeight * .045f
-        cameraFrame.layoutParams = FrameLayout.LayoutParams((right-left).toInt(), (bottom-top).toInt()).apply {
+        val videoWidth = right - left
+        val videoHeight = videoWidth * 9f / 16f
+        val availableTop = cardTop + cardHeight * .18f
+        val availableBottom = cardBottom - cardHeight * .055f
+        val availableHeight = availableBottom - availableTop
+        val finalHeight = minOf(videoHeight, availableHeight)
+        val top = availableTop + (availableHeight - finalHeight) / 2f
+
+        cameraFrame.layoutParams = FrameLayout.LayoutParams(videoWidth.toInt(), finalHeight.toInt()).apply {
             leftMargin = left.toInt()
             topMargin = top.toInt()
         }
