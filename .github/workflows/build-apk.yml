@@ -47,23 +47,12 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           p = Path('app/src/main/java/com/deskdock/app/ui/DockView.kt')
           s = p.read_text()
           if 'import com.deskdock.app.R' not in s:
               s = s.replace('import com.deskdock.app.model.*', 'import com.deskdock.app.R\nimport com.deskdock.app.model.*')
-
-          old = '''    private fun drawAtmosphere(c:Canvas,w:Float,h:Float){
-              val code=weather?.weatherCode?:2
-              val bmp=when{code==0->WeatherArt.clear;code in 51..99->WeatherArt.rain;else->WeatherArt.partly}?:return
-              val dst=RectF(w*.20f,h*.005f,w*.745f,h*.315f)
-              bitmapPaint.alpha=205
-              c.drawBitmap(bmp,null,dst,bitmapPaint)
-              bitmapPaint.alpha=255
-              fill.shader=LinearGradient(dst.left,dst.top,dst.left+w*.13f,dst.top,Color.BLACK,Color.TRANSPARENT,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
-              fill.shader=LinearGradient(dst.right-w*.15f,dst.top,dst.right,dst.top,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
-              fill.shader=LinearGradient(0f,h*.20f,0f,h*.33f,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(0f,h*.19f,w,h*.34f,fill);fill.shader=null
-          }'''
 
           new = '''    private fun drawAtmosphere(c:Canvas,w:Float,h:Float){
               val v=weather?:return
@@ -97,16 +86,19 @@ jobs:
               fill.shader=LinearGradient(dst.left,dst.top,dst.left+w*.10f,dst.top,Color.BLACK,Color.TRANSPARENT,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
               fill.shader=LinearGradient(dst.right-w*.19f,dst.top,dst.right,dst.top,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
               fill.shader=LinearGradient(0f,h*.20f,0f,h*.335f,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(0f,h*.19f,w,h*.34f,fill);fill.shader=null
-          }'''
+          }
+          '''
 
-          if old not in s:
-              raise SystemExit('drawAtmosphere original block not found')
-          p.write_text(s.replace(old, new))
+          pattern = r'    private fun drawAtmosphere\(c:Canvas,w:Float,h:Float\)\{.*?\n    \}\n\n    private fun drawHero'
+          if not re.search(pattern, s, flags=re.S):
+              raise SystemExit('drawAtmosphere block not found')
+          s = re.sub(pattern, new + '\n    private fun drawHero', s, count=1, flags=re.S)
+          p.write_text(s)
 
           g = Path('app/build.gradle.kts')
           t = g.read_text()
-          t = t.replace('versionCode = 25', 'versionCode = 26')
-          t = t.replace('versionName = "2.2.0"', 'versionName = "2.2.1"')
+          t = re.sub(r'versionCode\s*=\s*\d+', 'versionCode = 26', t)
+          t = re.sub(r'versionName\s*=\s*"[^"]+"', 'versionName = "2.2.1"', t)
           g.write_text(t)
           PY
 
