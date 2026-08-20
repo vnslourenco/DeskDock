@@ -30,7 +30,7 @@ class WeatherRepository {
         val forecastEndpoint =
             "https://api.open-meteo.com/v1/forecast?latitude=$latitude&longitude=$longitude" +
                 "&models=ecmwf_ifs" +
-                "&hourly=temperature_2m,apparent_temperature,weather_code,uv_index" +
+                "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,uv_index" +
                 "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset" +
                 "&timezone=auto&forecast_days=4"
 
@@ -56,7 +56,7 @@ class WeatherRepository {
             connectTimeout = 10_000
             readTimeout = 10_000
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "DeskDock/1.4")
+            setRequestProperty("User-Agent", "DeskDock/2.1")
         }
         return try {
             if (connection.responseCode !in 200..299) error("HTTP ${connection.responseCode}")
@@ -72,6 +72,7 @@ class WeatherRepository {
         val times = hourly.getJSONArray("time")
         val temps = hourly.getJSONArray("temperature_2m")
         val feels = hourly.getJSONArray("apparent_temperature")
+        val humidity = hourly.optJSONArray("relative_humidity_2m")
         val codes = hourly.getJSONArray("weather_code")
         val uvValues = hourly.optJSONArray("uv_index")
 
@@ -141,7 +142,8 @@ class WeatherRepository {
             airQualityIndex = airCurrent?.let { if (it.has("us_aqi") && !it.isNull("us_aqi")) it.optDouble("us_aqi").roundToInt() else null },
             pm25 = airCurrent?.let { if (it.has("pm2_5") && !it.isNull("pm2_5")) it.optDouble("pm2_5").roundToInt() else null },
             sunrise = sunrise,
-            sunset = sunset
+            sunset = sunset,
+            humidityPercent = humidity?.let { if (currentIndex < it.length() && !it.isNull(currentIndex)) it.optDouble(currentIndex).roundToInt() else null }
         )
     }
 }
