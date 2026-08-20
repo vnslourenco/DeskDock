@@ -1,18 +1,83 @@
 package com.deskdock.app.ui
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Base64
+import android.graphics.*
+import java.util.Calendar
+import kotlin.math.cos
+import kotlin.math.sin
 
 object WeatherArt {
-    private fun decode(data:String):Bitmap?=runCatching{val b=Base64.decode(data,Base64.DEFAULT);BitmapFactory.decodeByteArray(b,0,b.size)}.getOrNull()
-    val clear:Bitmap? by lazy{decode(CLEAR)}
-    val partly:Bitmap? by lazy{decode(PARTLY)}
-    val rain:Bitmap? by lazy{decode(RAIN)}
+    private const val W=1000
+    private const val H=560
 
-    private const val CLEAR="""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"""
+    private fun isDayNow():Boolean=Calendar.getInstance().get(Calendar.HOUR_OF_DAY) in 6..17
 
-    private const val PARTLY="""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"""
+    val clear:Bitmap? get()=scene(if(isDayNow()) Mode.DAY_CLEAR else Mode.NIGHT_CLEAR)
+    val partly:Bitmap? get()=scene(if(isDayNow()) Mode.DAY_PARTLY else Mode.NIGHT_PARTLY)
+    val cloudy:Bitmap? get()=scene(if(isDayNow()) Mode.DAY_CLOUDY else Mode.NIGHT_CLOUDY)
+    val rain:Bitmap? get()=scene(if(isDayNow()) Mode.DAY_RAIN else Mode.NIGHT_RAIN)
 
-    private const val RAIN="""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"""
+    private enum class Mode{DAY_CLEAR,DAY_PARTLY,DAY_CLOUDY,DAY_RAIN,NIGHT_CLEAR,NIGHT_PARTLY,NIGHT_CLOUDY,NIGHT_RAIN}
+    private val cache=mutableMapOf<Mode,Bitmap>()
+
+    private fun scene(mode:Mode):Bitmap=cache.getOrPut(mode){
+        val b=Bitmap.createBitmap(W,H,Bitmap.Config.ARGB_8888)
+        val c=Canvas(b)
+        val p=Paint(Paint.ANTI_ALIAS_FLAG)
+        val isDay=mode.name.startsWith("DAY")
+        val isRain=mode.name.endsWith("RAIN")
+        val isCloudy=mode.name.endsWith("CLOUDY")
+        val isPartly=mode.name.endsWith("PARTLY")
+
+        val top=if(isDay) Color.rgb(10,33,62) else Color.rgb(2,8,20)
+        val mid=if(isDay) Color.rgb(23,58,94) else Color.rgb(6,18,38)
+        val bottom=if(isDay) Color.rgb(8,16,27) else Color.rgb(1,4,11)
+        p.shader=LinearGradient(0f,0f,0f,H.toFloat(),intArrayOf(top,mid,bottom),floatArrayOf(0f,.55f,1f),Shader.TileMode.CLAMP)
+        c.drawRect(0f,0f,W.toFloat(),H.toFloat(),p);p.shader=null
+
+        if(isDay){
+            val sx=if(isPartly||isCloudy) 520f else 600f;val sy=165f
+            p.shader=RadialGradient(sx,sy,150f,intArrayOf(Color.argb(235,255,196,82),Color.argb(80,255,161,42),Color.TRANSPARENT),floatArrayOf(0f,.35f,1f),Shader.TileMode.CLAMP)
+            c.drawCircle(sx,sy,150f,p);p.shader=null
+            p.color=Color.rgb(255,225,145);c.drawCircle(sx,sy,28f,p)
+        }else{
+            val mx=590f;val my=145f
+            p.shader=RadialGradient(mx,my,130f,intArrayOf(Color.argb(190,185,210,255),Color.argb(45,105,145,220),Color.TRANSPARENT),floatArrayOf(0f,.35f,1f),Shader.TileMode.CLAMP)
+            c.drawCircle(mx,my,130f,p);p.shader=null
+            p.color=Color.rgb(224,232,246);c.drawCircle(mx,my,24f,p)
+            p.color=Color.argb(175,230,238,255)
+            for(i in 0..24){val x=(37*i%W).toFloat();val y=(19*i%210+24).toFloat();c.drawCircle(x,y,if(i%3==0)2.2f else 1.2f,p)}
+        }
+
+        if(isPartly||isCloudy||isRain){
+            val cloudCount=if(isCloudy||isRain) 12 else 7
+            for(i in 0 until cloudCount){
+                val baseX=250f+(i%6)*115f-(if(i%2==0)35f else 0f)
+                val baseY=150f+(i/6)*85f+(i%3)*14f
+                val scale=if(isCloudy||isRain)1.18f else .92f
+                cloud(c,p,baseX,baseY,scale,isDay,isRain)
+            }
+        }
+
+        if(isRain){
+            p.strokeWidth=2.2f;p.color=Color.argb(if(isDay)105 else 125,115,174,235)
+            for(i in 0..65){val x=(i*41%W).toFloat();val y=(205+i*29%(H-215)).toFloat();c.drawLine(x,y,x-11f,y+31f,p)}
+            p.shader=LinearGradient(0f,H*.72f,0f,H.toFloat(),Color.TRANSPARENT,Color.argb(150,15,49,79),Shader.TileMode.CLAMP)
+            c.drawRect(0f,H*.72f,W.toFloat(),H.toFloat(),p);p.shader=null
+        }
+
+        p.shader=LinearGradient(0f,H*.66f,0f,H.toFloat(),Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP)
+        c.drawRect(0f,H*.60f,W.toFloat(),H.toFloat(),p);p.shader=null
+        b
+    }
+
+    private fun cloud(c:Canvas,p:Paint,x:Float,y:Float,s:Float,isDay:Boolean,rain:Boolean){
+        val light=if(isDay&&!rain) Color.rgb(132,150,176) else Color.rgb(50,67,93)
+        val dark=if(isDay&&!rain) Color.rgb(43,58,80) else Color.rgb(19,32,54)
+        val parts=arrayOf(floatArrayOf(-72f,20f,58f),floatArrayOf(-30f,-12f,74f),floatArrayOf(25f,0f,67f),floatArrayOf(72f,24f,49f),floatArrayOf(0f,34f,88f))
+        for((idx,q) in parts.withIndex()){
+            val cx=x+q[0]*s;val cy=y+q[1]*s;val r=q[2]*s
+            p.shader=RadialGradient(cx-r*.22f,cy-r*.28f,r,if(idx%2==0)light else Color.rgb((Color.red(light)*.9).toInt(),(Color.green(light)*.9).toInt(),(Color.blue(light)*.9).toInt()),dark,Shader.TileMode.CLAMP)
+            c.drawCircle(cx,cy,r,p);p.shader=null
+        }
+    }
 }
