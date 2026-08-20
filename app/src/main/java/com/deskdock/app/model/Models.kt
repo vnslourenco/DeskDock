@@ -15,6 +15,7 @@ data class WeatherSnapshot(
     val pm25: Int? = null,
     val sunrise: String? = null,
     val sunset: String? = null,
+    val humidityPercent: Int? = null,
     val updatedAtMillis: Long = System.currentTimeMillis()
 )
 data class CalendarEvent(val title: String, val startMillis: Long, val endMillis: Long, val allDay: Boolean, val location: String? = null)
