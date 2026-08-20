@@ -43,6 +43,73 @@ jobs:
         with:
           gradle-version: '8.13'
 
+      - name: Apply DeskDock 2.2.1 weather artwork patch
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path('app/src/main/java/com/deskdock/app/ui/DockView.kt')
+          s = p.read_text()
+          if 'import com.deskdock.app.R' not in s:
+              s = s.replace('import com.deskdock.app.model.*', 'import com.deskdock.app.R\nimport com.deskdock.app.model.*')
+
+          old = '''    private fun drawAtmosphere(c:Canvas,w:Float,h:Float){
+              val code=weather?.weatherCode?:2
+              val bmp=when{code==0->WeatherArt.clear;code in 51..99->WeatherArt.rain;else->WeatherArt.partly}?:return
+              val dst=RectF(w*.20f,h*.005f,w*.745f,h*.315f)
+              bitmapPaint.alpha=205
+              c.drawBitmap(bmp,null,dst,bitmapPaint)
+              bitmapPaint.alpha=255
+              fill.shader=LinearGradient(dst.left,dst.top,dst.left+w*.13f,dst.top,Color.BLACK,Color.TRANSPARENT,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
+              fill.shader=LinearGradient(dst.right-w*.15f,dst.top,dst.right,dst.top,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
+              fill.shader=LinearGradient(0f,h*.20f,0f,h*.33f,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(0f,h*.19f,w,h*.34f,fill);fill.shader=null
+          }'''
+
+          new = '''    private fun drawAtmosphere(c:Canvas,w:Float,h:Float){
+              val v=weather?:return
+              val code=v.weatherCode
+              fun hhmm(value:String?):Int?{
+                  val parts=value?.split(":")?:return null
+                  if(parts.size<2)return null
+                  val hh=parts[0].toIntOrNull()?:return null
+                  val mm=parts[1].take(2).toIntOrNull()?:return null
+                  return hh*60+mm
+              }
+              val cal=Calendar.getInstance().apply{timeInMillis=now}
+              val nowMin=cal.get(Calendar.HOUR_OF_DAY)*60+cal.get(Calendar.MINUTE)
+              val rise=hhmm(v.sunrise);val set=hhmm(v.sunset)
+              val daylight=if(rise!=null&&set!=null) nowMin in rise until set else cal.get(Calendar.HOUR_OF_DAY) in 6..17
+              val resId=when{
+                  daylight&&code==0->R.drawable.weather_day_clear
+                  daylight&&code in 1..2->R.drawable.weather_day_partly
+                  daylight&&(code==3||code==45||code==48)->R.drawable.weather_day_cloudy
+                  daylight->R.drawable.weather_day_rain
+                  code==0->R.drawable.weather_night_clear
+                  code in 1..2->R.drawable.weather_night_partly
+                  code==3||code==45||code==48->R.drawable.weather_night_cloudy
+                  else->R.drawable.weather_night_rain
+              }
+              val bmp=WeatherArtLoader.get(context,resId)?:return
+              val dst=RectF(w*.20f,h*.000f,w*.785f,h*.320f)
+              bitmapPaint.alpha=235
+              c.drawBitmap(bmp,null,dst,bitmapPaint)
+              bitmapPaint.alpha=255
+              fill.shader=LinearGradient(dst.left,dst.top,dst.left+w*.10f,dst.top,Color.BLACK,Color.TRANSPARENT,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
+              fill.shader=LinearGradient(dst.right-w*.19f,dst.top,dst.right,dst.top,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
+              fill.shader=LinearGradient(0f,h*.20f,0f,h*.335f,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(0f,h*.19f,w,h*.34f,fill);fill.shader=null
+          }'''
+
+          if old not in s:
+              raise SystemExit('drawAtmosphere original block not found')
+          p.write_text(s.replace(old, new))
+
+          g = Path('app/build.gradle.kts')
+          t = g.read_text()
+          t = t.replace('versionCode = 25', 'versionCode = 26')
+          t = t.replace('versionName = "2.2.0"', 'versionName = "2.2.1"')
+          g.write_text(t)
+          PY
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
