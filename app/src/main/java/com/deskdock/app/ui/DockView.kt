@@ -134,9 +134,7 @@ class DockView(context: Context) : View(context) {
         val glow=RadialGradient(x,y,r*1.6f,Color.argb(130,105,125,160),Color.TRANSPARENT,Shader.TileMode.CLAMP)
         fill.shader=glow;c.drawCircle(x,y,r*1.6f,fill);fill.shader=null
         val shades=intArrayOf(Color.rgb(205,214,230),Color.rgb(164,178,201),Color.rgb(122,139,166),Color.rgb(82,99,127))
-        val parts=arrayOf(
-            floatArrayOf(-.62f,.10f,.52f),floatArrayOf(-.22f,-.25f,.66f),floatArrayOf(.25f,-.08f,.58f),floatArrayOf(.64f,.14f,.44f),floatArrayOf(.08f,.23f,.78f)
-        )
+        val parts=arrayOf(floatArrayOf(-.62f,.10f,.52f),floatArrayOf(-.22f,-.25f,.66f),floatArrayOf(.25f,-.08f,.58f),floatArrayOf(.64f,.14f,.44f),floatArrayOf(.08f,.23f,.78f))
         parts.forEachIndexed{i,p->
             val cx=x+p[0]*r;val cy=y+p[1]*r;val rr=p[2]*r
             val g=RadialGradient(cx-rr*.2f,cy-rr*.25f,rr,shades[i%shades.size],Color.rgb(45,55,73),Shader.TileMode.CLAMP)
@@ -152,9 +150,8 @@ class DockView(context: Context) : View(context) {
         stroke.strokeWidth=1f;stroke.color=Color.argb(100,Color.red(color),Color.green(color),Color.blue(color));c.drawRoundRect(r,h*.020f,h*.020f,stroke)
         fill.color=color;c.drawCircle(x+ph*.70f,y-h*.009f,h*.0055f,fill)
         text(c,label,x+ph*1.35f,y,h*.0215f,color,true)
-        return r.right+wGap()
+        return r.right+10f
     }
-    private fun wGap()=10f
 
     private fun drawHourlyStrip(c:Canvas,r:RectF,h:Float){
         card(c,r,h*.018f)
@@ -180,7 +177,7 @@ class DockView(context: Context) : View(context) {
             textCenter(c,v.dayLabel.uppercase(Locale("pt","BR")),cx,r.top+r.height()*.23f,h*.027f,WHITE,true)
             weatherIcon(c,v.weatherCode,cx,r.top+r.height()*.47f,h*.031f)
             textCenter(c,"${v.maxC}° / ${v.minC}°",cx,r.top+r.height()*.73f,h*.028f,WHITE,true)
-            textCenter(c,"${v.rainChance}% chuva",cx,r.top+r.height()*.90f,h*.020f,if(v.rainChance>0)BLUE:MUTED,false)
+            textCenter(c,"${v.rainChance}% chuva",cx,r.top+r.height()*.90f,h*.020f,if(v.rainChance>0) BLUE else MUTED,false)
         }
     }
 
@@ -214,8 +211,8 @@ class DockView(context: Context) : View(context) {
             if(i>0)line(c,left,y-h*.018f,right,y-h*.018f,Color.rgb(25,27,33),1f)
             val active=i==0
             if(active){fill.color=BLUE;c.drawCircle(left-h*.025f,y+h*.004f,h*.0048f,fill)}
-            text(c,eventTime(e),left,y+h*.016f,h*.033f,if(active)BLUE:WHITE,false)
-            fitText(c,e.title,left+w*.068f,y+h*.016f,h*.027f,h*.021f,right-(left+w*.068f),if(active)WHITE:MUTED,false)
+            text(c,eventTime(e),left,y+h*.016f,h*.033f,if(active) BLUE else WHITE,false)
+            fitText(c,e.title,left+w*.068f,y+h*.016f,h*.027f,h*.021f,right-(left+w*.068f),if(active) WHITE else MUTED,false)
             if(active) countdownLabel(e)?.let{text(c,it,left+w*.068f,y+h*.050f,h*.019f,BLUE,false)}
         }
     }
@@ -223,7 +220,6 @@ class DockView(context: Context) : View(context) {
     private fun drawBottomStatus(c:Canvas,w:Float,h:Float){
         text(c,"↻",w*.045f,h*.905f,h*.028f,DIM,false)
         text(c,"Atualizado ${SimpleDateFormat("HH:mm",Locale("pt","BR")).format(Date(weather?.updatedAtMillis?:now))}",w*.072f,h*.904f,h*.019f,DIM,false)
-
         val r=RectF(w*.560f,h*.850f,w*.835f,h*.932f)
         fill.color=Color.rgb(5,7,10);c.drawRoundRect(r,h*.045f,h*.045f,fill)
         stroke.strokeWidth=1f;stroke.color=Color.rgb(25,28,36);c.drawRoundRect(r,h*.045f,h*.045f,stroke)
