@@ -16,7 +16,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Publish run id
         run: |
           echo "${{ github.run_id }}" > .github/LATEST_RUN_ID
@@ -25,89 +24,34 @@ jobs:
           git add .github/LATEST_RUN_ID
           git commit -m "Update latest build run id" || true
           git push || true
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK 36
-        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
-
-      - name: Set up Gradle 8.13
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-
-      - name: Apply DeskDock 2.2.1 weather artwork patch
+      - name: Apply 2.3.0 behavior
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
-
-          p = Path('app/src/main/java/com/deskdock/app/ui/DockView.kt')
-          s = p.read_text()
-          if 'import com.deskdock.app.R' not in s:
-              s = s.replace('import com.deskdock.app.model.*', 'import com.deskdock.app.R\nimport com.deskdock.app.model.*')
-
-          new = '''    private fun drawAtmosphere(c:Canvas,w:Float,h:Float){
-              val v=weather?:return
-              val code=v.weatherCode
-              fun hhmm(value:String?):Int?{
-                  val parts=value?.split(":")?:return null
-                  if(parts.size<2)return null
-                  val hh=parts[0].toIntOrNull()?:return null
-                  val mm=parts[1].take(2).toIntOrNull()?:return null
-                  return hh*60+mm
-              }
-              val cal=Calendar.getInstance().apply{timeInMillis=now}
-              val nowMin=cal.get(Calendar.HOUR_OF_DAY)*60+cal.get(Calendar.MINUTE)
-              val rise=hhmm(v.sunrise);val set=hhmm(v.sunset)
-              val daylight=if(rise!=null&&set!=null) nowMin in rise until set else cal.get(Calendar.HOUR_OF_DAY) in 6..17
-              val resId=when{
-                  daylight&&code==0->R.drawable.weather_day_clear
-                  daylight&&code in 1..2->R.drawable.weather_day_partly
-                  daylight&&(code==3||code==45||code==48)->R.drawable.weather_day_cloudy
-                  daylight->R.drawable.weather_day_rain
-                  code==0->R.drawable.weather_night_clear
-                  code in 1..2->R.drawable.weather_night_partly
-                  code==3||code==45||code==48->R.drawable.weather_night_cloudy
-                  else->R.drawable.weather_night_rain
-              }
-              val bmp=WeatherArtLoader.get(context,resId)?:return
-              val dst=RectF(w*.20f,h*.000f,w*.785f,h*.320f)
-              bitmapPaint.alpha=235
-              c.drawBitmap(bmp,null,dst,bitmapPaint)
-              bitmapPaint.alpha=255
-              fill.shader=LinearGradient(dst.left,dst.top,dst.left+w*.10f,dst.top,Color.BLACK,Color.TRANSPARENT,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
-              fill.shader=LinearGradient(dst.right-w*.19f,dst.top,dst.right,dst.top,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(dst,fill);fill.shader=null
-              fill.shader=LinearGradient(0f,h*.20f,0f,h*.335f,Color.TRANSPARENT,Color.BLACK,Shader.TileMode.CLAMP);c.drawRect(0f,h*.19f,w,h*.34f,fill);fill.shader=null
-          }
-          '''
-
-          pattern = r'    private fun drawAtmosphere\(c:Canvas,w:Float,h:Float\)\{.*?\n    \}\n\n    private fun drawHero'
-          if not re.search(pattern, s, flags=re.S):
-              raise SystemExit('drawAtmosphere block not found')
-          s = re.sub(pattern, new + '\n    private fun drawHero', s, count=1, flags=re.S)
+          p=Path('app/src/main/java/com/deskdock/app/MainActivity.kt');s=p.read_text()
+          s=re.sub(r'\s*handler\.postDelayed\(forecastSwitch, prefs\.getInt\("hourly_seconds",60\)\.coerceIn\(10,300\)\*1000L\)','',s)
+          s=s.replace('val width=w*.56f;val height=width*9f/16f\n        cameraFrame.layoutParams=FrameLayout.LayoutParams(width.toInt(),height.toInt()).apply{\n            leftMargin=(w*.22f).toInt();topMargin=(h*.30f).toInt()\n        }','cameraFrame.layoutParams=FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT).apply{ leftMargin=0;topMargin=0 }')
+          s=s.replace('handler.postDelayed(cameraAutoOff,prefs.getInt("camera_seconds",30).coerceIn(10,300)*1000L)','handler.postDelayed(cameraAutoOff,30_000L)')
+          s=s.replace('cameraFrame.animate().alpha(1f).setDuration(250).start()','cameraFrame.alpha=1f')
+          s=s.replace('cameraFrame.animate().alpha(0f).setDuration(180).withEndAction{showCameraIdle()}.start()','showCameraIdle()')
           p.write_text(s)
-
-          g = Path('app/build.gradle.kts')
-          t = g.read_text()
-          t = re.sub(r'versionCode\s*=\s*\d+', 'versionCode = 26', t)
-          t = re.sub(r'versionName\s*=\s*"[^"]+"', 'versionName = "2.2.1"', t)
-          g.write_text(t)
+          g=Path('app/build.gradle.kts');t=g.read_text();t=re.sub(r'versionCode\s*=\s*\d+','versionCode = 27',t);t=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.3.0"',t);g.write_text(t)
           PY
-
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DeskDock-debug-apk
+          name: DeskDock-2.3.0
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
