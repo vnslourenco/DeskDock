@@ -3,9 +3,10 @@ name: Build DeskDock APK
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
     paths-ignore:
-      - ".github/LATEST_RUN_ID"
+      - .github/LATEST_RUN_ID
 
 permissions:
   contents: write
@@ -16,7 +17,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Publish run id
+        shell: bash
         run: |
           echo "${{ github.run_id }}" > .github/LATEST_RUN_ID
           git config user.name "github-actions[bot]"
@@ -24,64 +27,77 @@ jobs:
           git add .github/LATEST_RUN_ID
           git commit -m "Update latest build run id" || true
           git push || true
-      - uses: actions/setup-java@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
-      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Setup Android
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        shell: bash
+        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+
       - name: Apply 2.3.3 behavior
+        shell: bash
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
 
-          p=Path('app/src/main/java/com/deskdock/app/MainActivity.kt')
-          s=p.read_text()
-          s=re.sub(r'\s*handler\.postDelayed\(forecastSwitch, prefs\.getInt\("hourly_seconds",60\)\.coerceIn\(10,300\)\*1000L\)','',s)
-          s=re.sub(r'private fun positionCameraOverlay\(\)\{.*?\n    \}', '''private fun positionCameraOverlay(){
+          p = Path('app/src/main/java/com/deskdock/app/MainActivity.kt')
+          s = p.read_text()
+          s = re.sub(r'\s*handler\.postDelayed\(forecastSwitch, prefs\.getInt\("hourly_seconds",60\)\.coerceIn\(10,300\)\*1000L\)', '', s)
+          s = re.sub(r'private fun positionCameraOverlay\(\)\{.*?\n    \}', '''private fun positionCameraOverlay(){
               if(root.width<=0||root.height<=0)return
               cameraFrame.layoutParams=FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT).apply{leftMargin=0;topMargin=0}
               cameraFrame.requestLayout()
           }''', s, count=1, flags=re.S)
-          s=s.replace('handler.postDelayed(cameraAutoOff,prefs.getInt("camera_seconds",30).coerceIn(10,300)*1000L)','handler.postDelayed(cameraAutoOff,30_000L)')
-          s=s.replace('cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=0f;cameraFrame.animate().alpha(1f).setDuration(250).start()','cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=1f;positionCameraOverlay()')
-          s=s.replace('cameraFrame.animate().alpha(0f).setDuration(180).withEndAction{showCameraIdle()}.start()','showCameraIdle()')
+          s = s.replace('handler.postDelayed(cameraAutoOff,prefs.getInt("camera_seconds",30).coerceIn(10,300)*1000L)', 'handler.postDelayed(cameraAutoOff,30_000L)')
+          s = s.replace('cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=0f;cameraFrame.animate().alpha(1f).setDuration(250).start()', 'cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=1f;positionCameraOverlay()')
+          s = s.replace('cameraFrame.animate().alpha(0f).setDuration(180).withEndAction{showCameraIdle()}.start()', 'showCameraIdle()')
           p.write_text(s)
 
-          d=Path('app/src/main/java/com/deskdock/app/ui/DockView.kt')
-          u=d.read_text()
-          needle='''    private fun drawRight(c:Canvas,X:Float,S:Float){\n'''
-          battery='''    private fun drawRight(c:Canvas,X:Float,S:Float){
-        // Bateria no canto superior direito, acima do botão da câmera.
-        val bp=battery.percent.coerceIn(0,100)
-        txt(c,"${bp}%",1043*X,24*S,15*S,Color.WHITE,true)
-        val br=RectF(1100*X,8*S,1144*X,27*S)
-        line.style=Paint.Style.STROKE;line.strokeWidth=1.5f*S;line.color=Color.WHITE
-        c.drawRoundRect(br,3*S,3*S,line)
-        c.drawRect(1144*X,13*S,1148*X,22*S,line)
-        p.style=Paint.Style.FILL
-        p.color=if(bp<=20)Color.RED else Color.rgb(0,166,222)
-        val fillW=(40f*bp/100f)*X
-        if(fillW>0)c.drawRoundRect(RectF(1102*X,10*S,1102*X+fillW,25*S),2*S,2*S,p)
-'''
+          d = Path('app/src/main/java/com/deskdock/app/ui/DockView.kt')
+          u = d.read_text()
+          needle = '    private fun drawRight(c:Canvas,X:Float,S:Float){\n'
+          battery = '''    private fun drawRight(c:Canvas,X:Float,S:Float){
+              // Bateria no canto superior direito, acima do botão da câmera.
+              val bp=battery.percent.coerceIn(0,100)
+              txt(c,"${bp}%",1043*X,24*S,15*S,Color.WHITE,true)
+              val br=RectF(1100*X,8*S,1144*X,27*S)
+              line.style=Paint.Style.STROKE;line.strokeWidth=1.5f*S;line.color=Color.WHITE
+              c.drawRoundRect(br,3*S,3*S,line)
+              c.drawRect(1144*X,13*S,1148*X,22*S,line)
+              p.style=Paint.Style.FILL
+              p.color=if(bp<=20)Color.RED else Color.rgb(0,166,222)
+              val fillW=(40f*bp/100f)*X
+              if(fillW>0)c.drawRoundRect(RectF(1102*X,10*S,1102*X+fillW,25*S),2*S,2*S,p)
+          '''
           if needle in u:
-              u=u.replace(needle,battery,1)
-          else:
+              u = u.replace(needle, battery, 1)
+          elif 'Bateria no canto superior direito' not in u:
               raise SystemExit('drawRight marker not found')
           d.write_text(u)
 
-          g=Path('app/build.gradle.kts')
-          t=g.read_text()
-          t=re.sub(r'versionCode\s*=\s*\d+','versionCode = 30',t)
-          t=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.3.3"',t)
+          g = Path('app/build.gradle.kts')
+          t = g.read_text()
+          t = re.sub(r'versionCode\s*=\s*\d+', 'versionCode = 30', t)
+          t = re.sub(r'versionName\s*=\s*"[^"]+"', 'versionName = "2.3.3"', t)
           g.write_text(t)
           PY
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
