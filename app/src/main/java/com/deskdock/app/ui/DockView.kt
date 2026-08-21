@@ -63,8 +63,6 @@ class DockView(context: Context): View(context) {
         c.translate(sx,sy)
         val w=width.toFloat();val h=height.toFloat()
         if(w<1||h<1){c.restore();return}
-        // A referência enviada tem a mesma proporção do Poco F1 em paisagem.
-        // Base visual: 1215 x 585 -> escala uniforme para 2246 x 1080.
         val X=w/1215f
         val S=h/585f
         rule(c,287*X,32*S,287*X,568*S,3*S)
@@ -95,11 +93,12 @@ class DockView(context: Context): View(context) {
     private fun drawCenter(c:Canvas,X:Float,S:Float){
         val v=weather?:return
         txt(c,"Próximas Horas",620*X,51*S,25*S,Color.WHITE,true,true)
+        // Mantém as cinco horas inteiramente dentro da coluna central, sem invadir a divisória direita.
         v.hourly.take(5).forEachIndexed{i,a->
-            val cx=(365+i*132)*X
-            drawWeatherIcon(c,cx,88*S,21*S,a.weatherCode)
-            txt(c,a.hour,cx+25*X,98*S,22*S,Color.WHITE,true)
-            txt(c,"${a.temperatureC}°",cx+28*X,130*S,22*S)
+            val cx=(347+i*121)*X
+            drawWeatherIcon(c,cx,88*S,20*S,a.weatherCode)
+            txt(c,a.hour,cx+24*X,98*S,21*S,Color.WHITE,true)
+            txt(c,"${a.temperatureC}°",cx+25*X,130*S,21*S)
         }
         rule(c,341*X,153*S,899*X,153*S,3*S)
 
@@ -162,13 +161,21 @@ class DockView(context: Context): View(context) {
         c.drawRoundRect(rr,8f,8f,line);c.drawCircle(x,y,r*.38f,line);c.drawRect(x-r*.32f,y-r*.72f,x+r*.15f,y-r*.55f,line)
         line.style=Paint.Style.FILL
     }
+
     private fun drawWeatherIcon(c:Canvas,x:Float,y:Float,r:Float,code:Int){
+        // Ícones monocromáticos brancos para combinar com a nova interface.
         if(code==0){sun(c,x,y,r);return}
-        if(code>=51){cloud(c,x,y,r,Color.rgb(35,190,238));line.color=Color.YELLOW;line.strokeWidth=2.5f;for(i in -1..1)c.drawLine(x+i*r*.45f,y+r*.65f,x+i*r*.45f-r*.13f,y+r*1.05f,line);return}
-        sun(c,x-r*.42f,y-r*.25f,r*.55f);cloud(c,x+r*.15f,y+r*.18f,r*.82f,Color.rgb(40,188,235))
+        if(code>=51){
+            cloud(c,x,y,r,Color.WHITE)
+            line.color=Color.WHITE;line.strokeWidth=2.5f
+            for(i in -1..1)c.drawLine(x+i*r*.45f,y+r*.65f,x+i*r*.45f-r*.13f,y+r*1.05f,line)
+            return
+        }
+        sun(c,x-r*.42f,y-r*.25f,r*.55f)
+        cloud(c,x+r*.15f,y+r*.18f,r*.82f,Color.WHITE)
     }
     private fun sun(c:Canvas,x:Float,y:Float,r:Float){
-        p.color=Color.YELLOW;c.drawCircle(x,y,r*.55f,p);line.color=Color.YELLOW;line.strokeWidth=4f
+        p.color=Color.WHITE;c.drawCircle(x,y,r*.55f,p);line.color=Color.WHITE;line.strokeWidth=4f
         for(i in 0..7){val a=i*Math.PI/4;c.drawLine(x+cos(a).toFloat()*r*.72f,y+sin(a).toFloat()*r*.72f,x+cos(a).toFloat()*r,y+sin(a).toFloat()*r,line)}
     }
     private fun cloud(c:Canvas,x:Float,y:Float,r:Float,col:Int){
