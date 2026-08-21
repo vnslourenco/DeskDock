@@ -33,31 +33,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Apply 2.3.1 behavior
+      - name: Apply 2.3.2 behavior
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
           p=Path('app/src/main/java/com/deskdock/app/MainActivity.kt')
           s=p.read_text()
-          # Sem alternância automática de cards.
           s=re.sub(r'\s*handler\.postDelayed\(forecastSwitch, prefs\.getInt\("hourly_seconds",60\)\.coerceIn\(10,300\)\*1000L\)','',s)
-          # Câmera em tela cheia.
           s=re.sub(r'private fun positionCameraOverlay\(\)\{.*?\n    \}', '''private fun positionCameraOverlay(){
-        if(root.width<=0||root.height<=0)return
-        cameraFrame.layoutParams=FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT).apply{leftMargin=0;topMargin=0}
-        cameraFrame.requestLayout()
-    }''', s, count=1, flags=re.S)
-          # 30 segundos fixos.
+              if(root.width<=0||root.height<=0)return
+              cameraFrame.layoutParams=FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,FrameLayout.LayoutParams.MATCH_PARENT).apply{leftMargin=0;topMargin=0}
+              cameraFrame.requestLayout()
+          }''', s, count=1, flags=re.S)
           s=s.replace('handler.postDelayed(cameraAutoOff,prefs.getInt("camera_seconds",30).coerceIn(10,300)*1000L)','handler.postDelayed(cameraAutoOff,30_000L)')
-          # Entrada/saída imediata, sem fade.
           s=s.replace('cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=0f;cameraFrame.animate().alpha(1f).setDuration(250).start()','cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=1f;positionCameraOverlay()')
           s=s.replace('cameraFrame.animate().alpha(0f).setDuration(180).withEndAction{showCameraIdle()}.start()','showCameraIdle()')
           p.write_text(s)
           g=Path('app/build.gradle.kts')
           t=g.read_text()
-          t=re.sub(r'versionCode\s*=\s*\d+','versionCode = 28',t)
-          t=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.3.1"',t)
+          t=re.sub(r'versionCode\s*=\s*\d+','versionCode = 29',t)
+          t=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.3.2"',t)
           g.write_text(t)
           PY
       - name: Build debug APK
@@ -65,6 +61,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DeskDock-2.3.1
+          name: DeskDock-2.3.2
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
