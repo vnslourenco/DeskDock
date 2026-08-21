@@ -33,11 +33,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Apply 2.3.2 behavior
+      - name: Apply 2.3.3 behavior
         run: |
           python3 <<'PY'
           from pathlib import Path
           import re
+
           p=Path('app/src/main/java/com/deskdock/app/MainActivity.kt')
           s=p.read_text()
           s=re.sub(r'\s*handler\.postDelayed\(forecastSwitch, prefs\.getInt\("hourly_seconds",60\)\.coerceIn\(10,300\)\*1000L\)','',s)
@@ -50,10 +51,33 @@ jobs:
           s=s.replace('cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=0f;cameraFrame.animate().alpha(1f).setDuration(250).start()','cameraFrame.visibility=View.VISIBLE;cameraFrame.alpha=1f;positionCameraOverlay()')
           s=s.replace('cameraFrame.animate().alpha(0f).setDuration(180).withEndAction{showCameraIdle()}.start()','showCameraIdle()')
           p.write_text(s)
+
+          d=Path('app/src/main/java/com/deskdock/app/ui/DockView.kt')
+          u=d.read_text()
+          needle='''    private fun drawRight(c:Canvas,X:Float,S:Float){\n'''
+          battery='''    private fun drawRight(c:Canvas,X:Float,S:Float){
+        // Bateria no canto superior direito, acima do botão da câmera.
+        val bp=battery.percent.coerceIn(0,100)
+        txt(c,"${bp}%",1043*X,24*S,15*S,Color.WHITE,true)
+        val br=RectF(1100*X,8*S,1144*X,27*S)
+        line.style=Paint.Style.STROKE;line.strokeWidth=1.5f*S;line.color=Color.WHITE
+        c.drawRoundRect(br,3*S,3*S,line)
+        c.drawRect(1144*X,13*S,1148*X,22*S,line)
+        p.style=Paint.Style.FILL
+        p.color=if(bp<=20)Color.RED else Color.rgb(0,166,222)
+        val fillW=(40f*bp/100f)*X
+        if(fillW>0)c.drawRoundRect(RectF(1102*X,10*S,1102*X+fillW,25*S),2*S,2*S,p)
+'''
+          if needle in u:
+              u=u.replace(needle,battery,1)
+          else:
+              raise SystemExit('drawRight marker not found')
+          d.write_text(u)
+
           g=Path('app/build.gradle.kts')
           t=g.read_text()
-          t=re.sub(r'versionCode\s*=\s*\d+','versionCode = 29',t)
-          t=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.3.2"',t)
+          t=re.sub(r'versionCode\s*=\s*\d+','versionCode = 30',t)
+          t=re.sub(r'versionName\s*=\s*"[^"]+"','versionName = "2.3.3"',t)
           g.write_text(t)
           PY
       - name: Build debug APK
@@ -61,6 +85,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: DeskDock-2.3.2
+          name: DeskDock-2.3.3
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
